@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel do Treinador · Recomp</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel-2:#1c232d; --line:#2a333f;
+    --ink:#e8edf2; --ink-dim:#8b98a6; --ink-faint:#5c6875;
+    --accent:#38d6c8; --accent-glow:rgba(56,214,200,.14);
+    --ok:#4ade80; --warn:#fbbf24; --alert:#f87171;
+    --mono:'DM Mono','SF Mono',ui-monospace,Menlo,monospace;
+    --disp:'Archivo',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);line-height:1.5;padding:0 0 70px;
+    background-image:radial-gradient(1000px 500px at 80% -10%, var(--accent-glow), transparent 60%)}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  header{padding:32px 0 20px;border-bottom:1px solid var(--line);margin-bottom:24px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);margin-bottom:9px}
+  h1{font-family:'Archivo Narrow','Archivo',sans-serif;font-weight:700;font-size:clamp(26px,5vw,40px);
+    letter-spacing:-.01em;line-height:1;text-transform:uppercase}
+  .sub{color:var(--ink-dim);font-size:13.5px;margin-top:9px;max-width:60ch}
+
+  .bar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:20px 0 18px}
+  .btn{font-family:var(--mono);font-size:12.5px;padding:9px 15px;border-radius:9px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--ink);cursor:pointer;transition:.15s}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#0b0e12;border-color:var(--accent);font-weight:500}
+  .btn.primary:hover{filter:brightness(1.08);color:#0b0e12}
+  .status{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-left:auto}
+  .status.bad{color:var(--alert)} .status.good{color:var(--ok)}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px}
+  .card .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:8px}
+  .card .v{font-family:var(--mono);font-size:24px;font-weight:500}
+
+  .list{display:grid;gap:11px}
+  .cli{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 17px}
+  .cli-top{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .cli-name{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:17px;letter-spacing:.01em}
+  .cli-meta{font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-top:3px}
+  .cli-actions{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap}
+  .cli-actions .btn{padding:7px 11px;font-size:11.5px}
+  .cli-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:9px;margin-top:13px}
+  .st{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .st .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px}
+  .st .v{font-family:var(--mono);font-size:15px;font-weight:500}
+  .st .v.accent{color:var(--accent)}
+  .link-box{margin-top:11px;background:#0b0e13;border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);word-break:break-all}
+  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:13px;padding:32px 20px;text-align:center;
+    font-family:var(--mono);font-size:13px;color:var(--ink-faint)}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(6,9,13,.72);backdrop-filter:blur(3px);display:none;place-items:center;padding:20px;z-index:50}
+  .modal-bg.on{display:grid}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:15px;max-width:480px;width:100%;padding:22px}
+  .modal h3{font-family:'Archivo Narrow',sans-serif;font-size:18px;text-transform:uppercase;margin-bottom:6px}
+  .modal p{font-size:13px;color:var(--ink-dim);margin-bottom:13px}
+  .modal label{display:block;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-dim);margin:10px 0 6px}
+  .modal input{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;color:var(--ink);
+    font-family:var(--disp);font-size:15px;padding:10px 12px}
+  .modal input:focus{outline:none;border-color:var(--accent)}
+  .modal-row{display:flex;gap:8px;margin-top:15px;flex-wrap:wrap}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;
+    background:var(--accent);color:#0b0e12;font-family:var(--mono);font-size:13px;font-weight:500;
+    padding:11px 18px;border-radius:10px;z-index:60;transition:.25s;pointer-events:none}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .warn-box{background:rgba(251,191,36,.09);border:1px solid rgba(251,191,36,.3);border-radius:11px;padding:13px 15px;
+    font-size:12.5px;color:var(--warn);margin-bottom:18px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Área do treinador</div>
+    <h1>Meus alunos</h1>
+    <p class="sub">Crie alunos, gere o link pessoal de cada um, edite as fichas e acompanhe o progresso — tudo sincronizado na nuvem.</p>
+  </header>
+
+  <div class="warn-box" id="cfg-warn" style="display:none"></div>
+
+  <div class="bar">
+    <button class="btn primary" onclick="openNew()">+ Novo aluno</button>
+    <button class="btn" onclick="carregar()">↻ Atualizar</button>
+    <span class="status" id="status">—</span>
+  </div>
+
+  <div class="cards" id="resumo"></div>
+  <div class="list" id="lista"></div>
+</div>
+
+<div class="modal-bg" id="m-new">
+  <div class="modal">
+    <h3>Novo aluno</h3>
+    <p>Um link pessoal será gerado. Envie-o ao aluno — os dados dele ficam salvos na nuvem e você acompanha por aqui.</p>
+    <label>Nome do aluno</label>
+    <input id="f-nome" placeholder="Ex: João Pereira">
+    <label>Seu nome (treinador)</label>
+    <input id="f-treinador" placeholder="Ex: Salomão">
+    <div class="modal-row">
+      <button class="btn primary" onclick="criar()">Criar e gerar link</button>
+      <button class="btn" onclick="fechar()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ====== CONFIGURAÇÃO ====== */
+const CLOUD={
+  url:'https://ijiltqumyfoapqvtikry.supabase.co',
+  key:'sb_publishable_WtxpP822NhLFlVZf7xK-7A_bGLvIz6W',
+  table:'clientes'
+};
+// URL do app do aluno (mesma pasta). Ajuste se o arquivo tiver outro nome.
+const APP_FILE='index.html';
+
+function headers(){return {'apikey':CLOUD.key,'Authorization':'Bearer '+CLOUD.key,'Content-Type':'application/json'};}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1900);}
+function setStatus(t,cls){const e=document.getElementById('status');e.textContent=t;e.className='status '+(cls||'');}
+function openNew(){document.getElementById('f-nome').value='';document.getElementById('f-treinador').value=localStorage.getItem('recomp_coach')||'';document.getElementById('m-new').classList.add('on');setTimeout(()=>document.getElementById('f-nome').focus(),60);}
+function fechar(){document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('on'));}
+
+function novoToken(){
+  const a='abcdefghijkmnopqrstuvwxyz23456789';
+  let s=''; const arr=new Uint8Array(14);
+  (crypto&&crypto.getRandomValues)?crypto.getRandomValues(arr):arr.forEach((_,i)=>arr[i]=Math.random()*255);
+  for(let i=0;i<arr.length;i++) s+=a[arr[i]%a.length];
+  return s;
+}
+function linkDo(token){
+  const base=location.href.replace(/[^/]*$/,'');
+  return base+APP_FILE+'#t='+token;
+}
+
+let CLIENTES=[];
+
+async function carregar(){
+  setStatus('carregando…');
+  try{
+    const u=`${CLOUD.url}/rest/v1/${CLOUD.table}?select=*&order=criado_em.desc`;
+    const r=await fetch(u,{headers:headers()});
+    if(!r.ok){ throw new Error('HTTP '+r.status); }
+    CLIENTES=await r.json();
+    setStatus(CLIENTES.length+' aluno(s)','good');
+    render();
+  }catch(e){
+    setStatus('erro ao carregar','bad');
+    document.getElementById('cfg-warn').style.display='block';
+    document.getElementById('cfg-warn').innerHTML=
+      '<b>Não consegui acessar a nuvem.</b><br>Verifique se você executou o SQL do Bloco 2 no Supabase (tabela <code>clientes</code>) e se a URL/chave estão corretas. Detalhe: '+e.message;
+  }
+}
+
+async function criar(){
+  const nome=document.getElementById('f-nome').value.trim();
+  const treinador=document.getElementById('f-treinador').value.trim();
+  if(!nome){ toast('Informe o nome'); return; }
+  localStorage.setItem('recomp_coach',treinador);
+  const token=novoToken();
+  try{
+    const u=`${CLOUD.url}/rest/v1/${CLOUD.table}`;
+    const body=JSON.stringify({token,nome,treinador,dados:{}});
+    const r=await fetch(u,{method:'POST',headers:{...headers(),'Prefer':'return=representation'},body});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    fechar(); toast('Aluno criado');
+    await carregar();
+  }catch(e){ toast('Erro ao criar: '+e.message); }
+}
+
+async function remover(token,nome){
+  if(!confirm('Remover "'+nome+'" e todos os dados dele? Esta ação não pode ser desfeita.')) return;
+  try{
+    const u=`${CLOUD.url}/rest/v1/${CLOUD.table}?token=eq.${encodeURIComponent(token)}`;
+    const r=await fetch(u,{method:'DELETE',headers:headers()});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    toast('Removido'); await carregar();
+  }catch(e){ toast('Erro: '+e.message); }
+}
+
+function copiar(txt){
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast('Link copiado'));
+  else toast('Copie manualmente');
+}
+function abrirApp(token){ window.open(linkDo(token),'_blank'); }
+
+function fmt(n,dp=0){return (isFinite(n)?n:0).toLocaleString('pt-BR',{minimumFractionDigits:dp,maximumFractionDigits:dp});}
+function dias(iso){
+  if(!iso) return '—';
+  const d=Math.floor((Date.now()-new Date(iso).getTime())/86400000);
+  return d<=0?'hoje':(d===1?'ontem':d+' dias');
+}
+
+function resumoAluno(c){
+  const d=c.dados||{};
+  const modo=d.mode==='gain'?'Ganho':(d.mode==='cut'?'Cutting':'—');
+  const m=d[d.mode]||{};
+  // último peso registrado no log
+  let ultimo=null, semanas=0;
+  if(Array.isArray(m.log)){
+    m.log.forEach(r=>{ if(r && r.peso!=='' && r.peso!=null && isFinite(+r.peso)){ ultimo=+r.peso; semanas++; } });
+  }
+  const sess=(d.train&&d.train.session)||'—';
+  return {modo, peso:m.peso||null, alvo:m.alvo||null, ultimo, semanas, sess};
+}
+
+function render(){
+  const lista=document.getElementById('lista');
+  const resumo=document.getElementById('resumo');
+  if(!CLIENTES.length){
+    resumo.innerHTML='';
+    lista.innerHTML='<div class="empty">Nenhum aluno ainda. Clique em <b>+ Novo aluno</b> para criar o primeiro e gerar o link pessoal dele.</div>';
+    return;
+  }
+  const ativos=CLIENTES.filter(c=>c.atualizado_em && (Date.now()-new Date(c.atualizado_em).getTime())<8*86400000).length;
+  resumo.innerHTML=`
+    <div class="card"><div class="k">Alunos</div><div class="v">${CLIENTES.length}</div></div>
+    <div class="card"><div class="k">Ativos (7 dias)</div><div class="v">${ativos}</div></div>`;
+
+  lista.innerHTML=CLIENTES.map(c=>{
+    const r=resumoAluno(c);
+    const link=linkDo(c.token);
+    return `<div class="cli">
+      <div class="cli-top">
+        <div>
+          <div class="cli-name">${(c.nome||'Sem nome').replace(/</g,'&lt;')}</div>
+          <div class="cli-meta">${r.modo} · último acesso ${dias(c.atualizado_em)}</div>
+        </div>
+        <div class="cli-actions">
+          <button class="btn" onclick="copiar('${link}')">Copiar link</button>
+          <button class="btn" onclick="abrirApp('${c.token}')">Abrir / editar ficha</button>
+          <button class="btn" onclick="remover('${c.token}','${(c.nome||'').replace(/'/g,'')}')">Remover</button>
+        </div>
+      </div>
+      <div class="cli-stats">
+        <div class="st"><div class="k">Peso inicial</div><div class="v">${r.peso?fmt(r.peso,1)+' kg':'—'}</div></div>
+        <div class="st"><div class="k">Objetivo</div><div class="v">${r.alvo?fmt(r.alvo,1)+' kg':'—'}</div></div>
+        <div class="st"><div class="k">Último peso</div><div class="v accent">${r.ultimo?fmt(r.ultimo,1)+' kg':'—'}</div></div>
+        <div class="st"><div class="k">Semanas reg.</div><div class="v">${r.semanas||0}</div></div>
+        <div class="st"><div class="k">Sessão treino</div><div class="v">${r.sess}</div></div>
+      </div>
+      <div class="link-box">${link}</div>
+    </div>`;
+  }).join('');
+}
+
+document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)fechar();}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')fechar();});
+carregar();
+</script>
+</body>
+</html>
