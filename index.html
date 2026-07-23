@@ -185,6 +185,23 @@
   .meth-note{background:var(--panel-2);border:1px dashed var(--line);border-radius:12px;padding:14px 16px;
     font-size:12.5px;color:var(--ink-faint);line-height:1.55}
 
+  /* IMPORTADOR DE FICHA */
+  .imp-box{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:17px;margin-bottom:16px}
+  .imp-box h4{font-family:'Archivo Narrow',sans-serif;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:7px}
+  .imp-box p{font-size:12.5px;color:var(--ink-dim);line-height:1.55;margin-bottom:11px}
+  .imp-drop{border:1.5px dashed var(--line);border-radius:11px;padding:22px 16px;text-align:center;cursor:pointer;transition:.15s;background:var(--panel-2)}
+  .imp-drop:hover,.imp-drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--panel-2))}
+  .imp-drop .big{font-family:var(--mono);font-size:13.5px;color:var(--ink);margin-bottom:4px}
+  .imp-drop .small{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+  .imp-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+  .imp-cols{font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-top:9px;line-height:1.6}
+  .imp-cols b{color:var(--ink-dim)}
+  .imp-result{margin-top:12px;border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.5;display:none}
+  .imp-result.on{display:block}
+  .imp-result.ok{background:rgba(74,222,128,.10);color:var(--ok)}
+  .imp-result.bad{background:rgba(248,113,113,.10);color:var(--alert)}
+  .imp-result ul{margin:6px 0 0 16px}
+
   /* MODE TOGGLE */
   .modes{display:flex;gap:6px;margin-top:22px;background:var(--panel);border:1px solid var(--line);
          border-radius:12px;padding:5px;width:fit-content}
@@ -427,7 +444,24 @@
 
       <!-- SUBVIEW: EDITAR FICHA -->
       <div id="wk-sub-edit" style="display:none">
-        <div class="ed-note">Monte a ficha deste aluno: nome do exercício, grupo, séries, faixa de reps (piso e topo, base da dupla progressão), carga inicial e incremento de carga (o passo em kg quando ele atingir o topo da faixa). Tudo é salvo automaticamente por aluno.</div>
+        <div class="imp-box">
+          <h4>Carregar ficha de um arquivo</h4>
+          <p>Monte a ficha inteira numa planilha e carregue aqui — muito mais rápido que digitar exercício por exercício. Aceita CSV ou Excel (.xlsx).</p>
+          <div class="imp-drop" id="imp-drop" onclick="document.getElementById('imp-file').click()">
+            <div class="big">Toque para escolher o arquivo</div>
+            <div class="small">ou arraste até aqui · .csv ou .xlsx</div>
+          </div>
+          <input type="file" id="imp-file" accept=".csv,.xlsx,.xls,text/csv" style="display:none" onchange="impArquivo(this.files[0])">
+          <div class="imp-cols">
+            Colunas esperadas: <b>Dia, Exercicio, Grupo, Series, RepMin, RepMax</b><br>
+            A carga inicial fica zerada — o aluno preenche na 1ª sessão. O incremento é definido pelo grupo (inferiores 5 kg · superiores 2,5 kg).
+          </div>
+          <div class="imp-actions">
+            <button class="btn" onclick="impModelo()">Baixar modelo CSV</button>
+          </div>
+          <div class="imp-result" id="imp-result"></div>
+        </div>
+        <div class="ed-note">Ou edite manualmente abaixo: nome do exercício, grupo, séries, faixa de reps, carga e incremento. Tudo salvo automaticamente por aluno.</div>
         <div id="wk-editor"></div>
         <div class="ed-toolbar" style="margin-top:14px">
           <button class="btn primary" onclick="edAddDay()">+ Adicionar dia</button>
@@ -1389,6 +1423,204 @@ function renderWkMethod(){
     <p>Ao <b>Fechar sessão</b>, o app sobe a carga automaticamente nos exercícios em que todas as séries bateram o topo, e avança o contador.</p>`;
 }
 
+/* ---------- importador de ficha (CSV / XLSX) ---------- */
+const IMP_MODELO=`Dia,Exercicio,Grupo,Series,RepMin,RepMax
+Dia 1,Supino reto,Peito,4,8,12
+Dia 1,Crucifixo inclinado,Peito,3,10,12
+Dia 1,Elevação lateral,Ombro,4,12,15
+Dia 1,Tríceps corda,Tríceps,4,10,12
+Dia 2,Puxada alta,Costas,4,8,12
+Dia 2,Remada curvada,Costas,4,8,12
+Dia 2,Rosca direta,Bíceps,4,8,12
+Dia 3,Agachamento livre,Quadríceps,4,6,10
+Dia 3,Leg press,Quadríceps,4,8,12
+Dia 3,Mesa flexora,Ísquios,4,10,12
+Dia 3,Panturrilha em pé,Panturrilha,4,10,15`;
+
+function impModelo(){
+  const blob=new Blob(['\ufeff'+IMP_MODELO],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='modelo_ficha_treino.csv'; a.click();
+  URL.revokeObjectURL(a.href); toast('Modelo baixado');
+}
+function impMsg(html,cls){
+  const el=document.getElementById('imp-result');
+  if(!el) return;
+  el.className='imp-result on '+cls; el.innerHTML=html;
+}
+// divide linha de CSV respeitando aspas
+function csvLinha(l){
+  const out=[]; let cur='', dentro=false;
+  for(let i=0;i<l.length;i++){
+    const ch=l[i];
+    if(ch==='"'){ if(dentro && l[i+1]==='"'){cur+='"';i++;} else dentro=!dentro; }
+    else if((ch===','||ch===';') && !dentro){ out.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  out.push(cur);
+  return out.map(s=>s.trim());
+}
+// normaliza cabeçalho: minúsculo, sem acento
+function norm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+}
+// converte matriz [[..]] em plano de treino
+function impMatriz(rows){
+  if(!rows.length) throw new Error('Arquivo vazio.');
+  const head=rows[0].map(norm);
+  const idx=(...alts)=>{ for(const a of alts){ const i=head.indexOf(a); if(i>=0) return i; } return -1; };
+  const iDia=idx('dia'), iEx=idx('exercicio','exercicios','nome'),
+        iGr=idx('grupo','grupomuscular','musculo'),
+        iSe=idx('series','serie'),
+        iLo=idx('repmin','repminima','minreps','repsmin','min'),
+        iHi=idx('repmax','repmaxima','maxreps','repsmax','max');
+  const faltando=[];
+  if(iDia<0) faltando.push('Dia');
+  if(iEx<0) faltando.push('Exercicio');
+  if(iSe<0) faltando.push('Series');
+  if(iLo<0) faltando.push('RepMin');
+  if(iHi<0) faltando.push('RepMax');
+  if(faltando.length) throw new Error('Coluna(s) não encontrada(s): '+faltando.join(', ')+'. Confira o cabeçalho da planilha.');
+
+  const dias=[]; const mapa={}; const avisos=[]; let n=0;
+  for(let r=1;r<rows.length;r++){
+    const L=rows[r]; if(!L||!L.length) continue;
+    const dia=String(L[iDia]||'').trim();
+    const nome=String(L[iEx]||'').trim();
+    if(!dia && !nome) continue;              // linha em branco
+    if(!nome){ avisos.push('Linha '+(r+1)+': sem nome de exercício, ignorada.'); continue; }
+    if(!dia){ avisos.push('Linha '+(r+1)+' ('+nome+'): sem dia, ignorada.'); continue; }
+    const grupo=iGr>=0?String(L[iGr]||'').trim():'';
+    let sets=parseInt(L[iSe],10); if(!(sets>0)){ sets=3; avisos.push('Linha '+(r+1)+' ('+nome+'): séries inválidas, usei 3.'); }
+    let lo=parseInt(L[iLo],10), hi=parseInt(L[iHi],10);
+    if(!(lo>0)){ lo=8; avisos.push('Linha '+(r+1)+' ('+nome+'): RepMin inválida, usei 8.'); }
+    if(!(hi>0)){ hi=12; avisos.push('Linha '+(r+1)+' ('+nome+'): RepMax inválida, usei 12.'); }
+    if(hi<lo){ const t=lo; lo=hi; hi=t; avisos.push('Linha '+(r+1)+' ('+nome+'): faixa invertida, corrigida para '+lo+'-'+hi+'.'); }
+    if(!mapa[dia]){ mapa[dia]={day:dia,ex:[]}; dias.push(mapa[dia]); }
+    mapa[dia].ex.push({group:grupo,name:nome,sets,repLo:lo,repHi:hi,load:0,inc:incFor(grupo),incAuto:true});
+    n++;
+  }
+  if(!n) throw new Error('Nenhum exercício válido encontrado no arquivo.');
+  return {dias,n,avisos};
+}
+async function impArquivo(file){
+  if(!file) return;
+  try{
+    let rows;
+    const nome=(file.name||'').toLowerCase();
+    if(nome.endsWith('.xlsx')||nome.endsWith('.xls')){
+      rows=await impLerXlsx(file);
+    }else{
+      let txt=await file.text();
+      if(txt.charCodeAt(0)===0xFEFF) txt=txt.slice(1);         // remove BOM
+      rows=txt.split(/\r?\n/).filter(l=>l.trim()!=='').map(csvLinha);
+    }
+    const {dias,n,avisos}=impMatriz(rows);
+    const totalDias=dias.length;
+    if(!confirm(`Carregar ${n} exercício(s) em ${totalDias} dia(s)?\n\nIsto SUBSTITUI a ficha atual deste aluno. Os registros de sessões já feitas são mantidos.`)) return;
+    S.train.plan=dias; S.train.day=0; save(); renderEditor();
+    let html='<b>Ficha carregada.</b> '+n+' exercício(s) em '+totalDias+' dia(s).';
+    if(avisos.length){ html+='<br><b>Avisos:</b><ul>'+avisos.slice(0,8).map(a=>'<li>'+a+'</li>').join('')+'</ul>'; if(avisos.length>8) html+='<div>…e mais '+(avisos.length-8)+'.</div>'; }
+    impMsg(html,'ok'); toast('Ficha carregada');
+  }catch(e){
+    impMsg('<b>Não consegui ler o arquivo.</b><br>'+e.message,'bad');
+  }
+  const inp=document.getElementById('imp-file'); if(inp) inp.value='';
+}
+// decodifica entidades XML, inclusive numéricas (&#237; = í) usadas pelo Excel
+function impDecod(s){
+  return String(s==null?'':s)
+    .replace(/&#x([0-9a-fA-F]+);/g,(_,h)=>String.fromCodePoint(parseInt(h,16)))
+    .replace(/&#(\d+);/g,(_,d)=>String.fromCodePoint(parseInt(d,10)))
+    .replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+    .replace(/&amp;/g,'&');
+}
+// leitura mínima de .xlsx (sem biblioteca): descompacta e lê sharedStrings + sheet1
+async function impLerXlsx(file){
+  if(typeof DecompressionStream==='undefined')
+    throw new Error('Este navegador não lê .xlsx aqui. Salve a planilha como CSV e tente de novo.');
+  const buf=new Uint8Array(await file.arrayBuffer());
+  const arquivos=zipListar(buf);
+  const pick=n=>arquivos.find(f=>f.nome.toLowerCase()===n);
+  const shared=pick('xl/sharedstrings.xml'), sheet=pick('xl/worksheets/sheet1.xml');
+  if(!sheet) throw new Error('Planilha não reconhecida. Salve como CSV e tente de novo.');
+  const strs=[];
+  if(shared){
+    const xml=new TextDecoder().decode(await zipInflar(shared));
+    xml.replace(/<si>([\s\S]*?)<\/si>/g,(_,si)=>{
+      let t=''; si.replace(/<t[^>]*>([\s\S]*?)<\/t>/g,(__,v)=>{t+=v;return'';});
+      strs.push(impDecod(t));
+      return'';
+    });
+  }
+  const xml=new TextDecoder().decode(await zipInflar(sheet));
+  const linhas=[];
+  xml.replace(/<row[^>]*>([\s\S]*?)<\/row>/g,(_,rw)=>{
+    const cels=[];
+    rw.replace(/<c([^>]*)>([\s\S]*?)<\/c>/g,(__,attr,body)=>{
+      const ref=(attr.match(/r="([A-Z]+)\d+"/)||[])[1]||'';
+      let col=0; for(let i=0;i<ref.length;i++) col=col*26+(ref.charCodeAt(i)-64);
+      col=col>0?col-1:cels.length;
+      const tipo=(attr.match(/t="([^"]+)"/)||[])[1];
+      let val='';
+      if(tipo==='inlineStr'){
+        // texto embutido: <is><t>..</t></is> (pode haver vários <t>)
+        body.replace(/<t[^>]*>([\s\S]*?)<\/t>/g,(___,v)=>{ val+=v; return''; });
+      } else {
+        const v=(body.match(/<v>([\s\S]*?)<\/v>/)||[])[1];
+        if(tipo==='s') val=strs[parseInt(v,10)]||'';
+        else val=v!=null?v:'';
+      }
+      cels[col]=impDecod(val);
+      return'';
+    });
+    for(let i=0;i<cels.length;i++) if(cels[i]==null) cels[i]='';
+    linhas.push(cels);
+    return'';
+  });
+  return linhas.filter(l=>l.some(c=>String(c).trim()!==''));
+}
+// ---- ZIP mínimo (xlsx é um zip) ----
+function zipListar(buf){
+  const dv=new DataView(buf.buffer); const out=[];
+  // procura End of Central Directory
+  let eocd=-1;
+  for(let i=buf.length-22;i>=0 && i>buf.length-65558;i--){ if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;} }
+  if(eocd<0) throw new Error('Arquivo .xlsx inválido.');
+  let n=dv.getUint16(eocd+10,true), off=dv.getUint32(eocd+16,true);
+  for(let k=0;k<n;k++){
+    if(dv.getUint32(off,true)!==0x02014b50) break;
+    const metodo=dv.getUint16(off+10,true);
+    const tamComp=dv.getUint32(off+20,true);
+    const tamNome=dv.getUint16(off+28,true);
+    const tamExtra=dv.getUint16(off+30,true);
+    const tamCom=dv.getUint16(off+32,true);
+    const lfh=dv.getUint32(off+42,true);
+    const nome=new TextDecoder().decode(buf.subarray(off+46,off+46+tamNome));
+    // header local para achar o início real dos dados
+    const nl=dv.getUint16(lfh+26,true), el=dv.getUint16(lfh+28,true);
+    const ini=lfh+30+nl+el;
+    out.push({nome,metodo,dados:buf.subarray(ini,ini+tamComp)});
+    off+=46+tamNome+tamExtra+tamCom;
+  }
+  return out;
+}
+async function zipInflar(f){
+  if(f.metodo===0) return f.dados;                       // sem compressão
+  const ds=new DecompressionStream('deflate-raw');
+  const stream=new Blob([f.dados]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+// arrastar e soltar
+function impInitDrop(){
+  const d=document.getElementById('imp-drop');
+  if(!d||d._init) return; d._init=true;
+  ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('over');}));
+  d.addEventListener('drop',e=>{ const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) impArquivo(f); });
+}
+
 /* ---------- editor de ficha ---------- */
 function setWkMode(m){
   S.train.wkMode=m; save();
@@ -1396,7 +1628,7 @@ function setWkMode(m){
   document.getElementById('wk-tab-edit').setAttribute('aria-selected', m==='edit');
   document.getElementById('wk-sub-log').style.display = m==='log'?'block':'none';
   document.getElementById('wk-sub-edit').style.display = m==='edit'?'block':'none';
-  if(m==='edit') renderEditor(); else renderTrain();
+  if(m==='edit'){ renderEditor(); impInitDrop(); } else renderTrain();
 }
 
 function renderEditor(){
