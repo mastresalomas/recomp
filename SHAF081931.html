@@ -114,7 +114,7 @@
 /* ====== CONFIGURAÇÃO ====== */
 const CLOUD={
   url:'https://ijiltqumyfoapqvtikry.supabase.co',
-  key:'sb_publishable_WtxpP822NhLFlVZf7xK-7A_bGLvIz6W',
+  key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlqaWx0cXVteWZvYXBxdnRpa3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MTM3NzcsImV4cCI6MjEwMDI4OTc3N30.DHK_5Dn87-FelpeWD5rjLWUEY5htN1-2dbC_0pblK7M',
   table:'clientes'
 };
 // URL do app do aluno (mesma pasta). Ajuste se o arquivo tiver outro nome.
@@ -136,6 +136,10 @@ function novoToken(){
 function linkDo(token){
   const base=location.href.replace(/[^/]*$/,'');
   return base+APP_FILE+'#t='+token;
+}
+// link de edição (só treinador): adiciona edit=1, que libera a aba Editar ficha
+function linkEdit(token){
+  return linkDo(token)+'&edit=1';
 }
 
 let CLIENTES=[];
@@ -187,7 +191,7 @@ function copiar(txt){
   if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast('Link copiado'));
   else toast('Copie manualmente');
 }
-function abrirApp(token){ window.open(linkDo(token),'_blank'); }
+function abrirApp(token){ window.open(linkEdit(token),'_blank'); }
 
 function fmt(n,dp=0){return (isFinite(n)?n:0).toLocaleString('pt-BR',{minimumFractionDigits:dp,maximumFractionDigits:dp});}
 function dias(iso){
@@ -232,8 +236,8 @@ function render(){
           <div class="cli-meta">${r.modo} · último acesso ${dias(c.atualizado_em)}</div>
         </div>
         <div class="cli-actions">
-          <button class="btn" onclick="copiar('${link}')">Copiar link</button>
-          <button class="btn" onclick="abrirApp('${c.token}')">Abrir / editar ficha</button>
+          <button class="btn" onclick="copiar('${link}')">Copiar link do aluno</button>
+          <button class="btn" onclick="abrirApp('${c.token}')">Editar ficha (treinador)</button>
           <button class="btn" onclick="remover('${c.token}','${(c.nome||'').replace(/'/g,'')}')">Remover</button>
         </div>
       </div>

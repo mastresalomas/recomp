@@ -552,6 +552,13 @@ function cloudToken(){
   const m=h.match(/[#&]t=([A-Za-z0-9_-]+)/);
   return m?m[1]:null;
 }
+// modo treinador: link tem &edit=1 (o painel adiciona). Sem token = ambiente local (também treinador).
+function isCoachMode(){
+  const h=location.hash||'';
+  if(/[#&]edit=1\b/.test(h)) return true;   // aberto pelo painel do treinador
+  if(!cloudToken()) return true;            // sem token = uso local/edição livre
+  return false;                             // token sem edit = aluno
+}
 let CLOUD_ON=false;      // ligado quando há token válido
 let cloudRow=null;       // registro do cliente na nuvem
 let syncTimer=null, syncing=false;
@@ -1622,7 +1629,16 @@ function impInitDrop(){
 }
 
 /* ---------- editor de ficha ---------- */
+function applyCoachUI(){
+  const coach=isCoachMode();
+  const tabEdit=document.getElementById('wk-tab-edit');
+  if(tabEdit) tabEdit.style.display = coach ? '' : 'none';
+  // se for aluno e por algum motivo estiver no modo editar, volta para registrar
+  if(!coach && S.train && S.train.wkMode==='edit'){ S.train.wkMode='log'; }
+}
 function setWkMode(m){
+  // trava: aluno não acessa edição de ficha
+  if(m==='edit' && !isCoachMode()){ m='log'; }
   S.train.wkMode=m; save();
   document.getElementById('wk-tab-log').setAttribute('aria-selected', m==='log');
   document.getElementById('wk-tab-edit').setAttribute('aria-selected', m==='edit');
@@ -1777,6 +1793,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
 
 (async function boot(){
   await cloudInit();           // se o link tiver token, carrega da nuvem
+  applyCoachUI();              // esconde edição de ficha se for aluno
   renderIdentity();
   setMode(S.mode);
   setView(S.view||'nutri');
