@@ -708,8 +708,11 @@ function load(){
 }
 function save(){
   try{
-    KEY=keyFor(S.athlete);
-    setActiveAthlete(S.athlete||'');
+    // no modo nuvem, a chave já é isolada por token (definida em cloudInit) — não recalcular por nome
+    if(!CLOUD_ON){
+      KEY=keyFor(S.athlete);
+      setActiveAthlete(S.athlete||'');
+    }
     localStorage.setItem(KEY,JSON.stringify(S));
     flashSaved();
   }catch(e){}
@@ -725,6 +728,9 @@ async function cloudInit(){
     const row=await cloudFetchByToken(token);
     if(!row){ setCloudStatus('erro'); toast('Link não encontrado'); return false; }
     cloudRow=row; CLOUD_ON=true;
+    // no modo nuvem, a chave local é isolada por TOKEN (único por aluno),
+    // evitando que abrir a ficha de um aluno sobrescreva a de outro no navegador
+    KEY=KEY_BASE+'::cloud::'+token;
     // adota os dados da nuvem (se houver), preservando estrutura padrão
     if(row.dados && row.dados.gain){
       S=row.dados;
