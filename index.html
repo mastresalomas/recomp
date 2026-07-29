@@ -453,8 +453,8 @@
           </div>
           <input type="file" id="imp-file" accept=".csv,.xlsx,.xls,text/csv" style="display:none" onchange="impArquivo(this.files[0])">
           <div class="imp-cols">
-            Colunas esperadas: <b>Dia, Exercicio, Grupo, Series, RepMin, RepMax</b><br>
-            A carga inicial fica zerada — o aluno preenche na 1ª sessão. O incremento é definido pelo grupo (inferiores 5 kg · superiores 2,5 kg).
+            Colunas obrigatórias: <b>Dia, Exercicio, Grupo, Series, RepMin, RepMax</b><br>
+            Colunas opcionais (histórico): <b>Carga, Reps1…Reps5</b> — se preenchidas, a carga vira a carga de trabalho e as reps já entram no registro da sessão (editáveis). Sem elas, os campos ficam vazios. O incremento é definido pelo grupo (inferiores 5 kg · superiores 2,5 kg).
           </div>
           <div class="imp-actions">
             <button class="btn" onclick="impModelo()">Baixar modelo CSV</button>
@@ -1487,6 +1487,9 @@ function impMatriz(rows){
         iSe=idx('series','serie'),
         iLo=idx('repmin','repminima','minreps','repsmin','min'),
         iHi=idx('repmax','repmaxima','maxreps','repsmax','max');
+  // colunas OPCIONAIS: carga e reps do treino anterior
+  const iCarga=idx('carga','load','peso','pesokg');
+  const iReps=[idx('reps1','rep1'),idx('reps2','rep2'),idx('reps3','rep3'),idx('reps4','rep4'),idx('reps5','rep5')];
   const faltando=[];
   if(iDia<0) faltando.push('Dia');
   if(iEx<0) faltando.push('Exercicio');
@@ -1509,8 +1512,29 @@ function impMatriz(rows){
     if(!(lo>0)){ lo=8; avisos.push('Linha '+(r+1)+' ('+nome+'): RepMin inválida, usei 8.'); }
     if(!(hi>0)){ hi=12; avisos.push('Linha '+(r+1)+' ('+nome+'): RepMax inválida, usei 12.'); }
     if(hi<lo){ const t=lo; lo=hi; hi=t; avisos.push('Linha '+(r+1)+' ('+nome+'): faixa invertida, corrigida para '+lo+'-'+hi+'.'); }
+    // carga do treino anterior (opcional) → vira carga de trabalho do exercício
+    let carga=0;
+    if(iCarga>=0){
+      const raw=String(L[iCarga]==null?'':L[iCarga]).trim().replace(',','.');
+      if(raw!=='' && isFinite(+raw) && +raw>=0) carga=+raw;
+    }
+    // reps realizadas por série (opcional) → registro da sessão. Vazio = sem dado (não zero).
+    let repsPrev=null;
+    if(iReps.some(ix=>ix>=0)){
+      const arr=[];
+      for(let s=0;s<5;s++){
+        const ix=iReps[s];
+        if(ix<0){ arr.push(''); continue; }
+        const raw=String(L[ix]==null?'':L[ix]).trim();
+        arr.push(raw!=='' && isFinite(+raw) ? +raw : '');
+      }
+      // só guarda se há ao menos uma rep preenchida
+      if(arr.some(v=>v!=='')) repsPrev=arr.slice(0,sets);
+    }
     if(!mapa[dia]){ mapa[dia]={day:dia,ex:[]}; dias.push(mapa[dia]); }
-    mapa[dia].ex.push({group:grupo,name:nome,sets,repLo:lo,repHi:hi,load:0,inc:incFor(grupo),incAuto:true});
+    const exObj={group:grupo,name:nome,sets,repLo:lo,repHi:hi,load:carga,inc:incFor(grupo),incAuto:true};
+    if(repsPrev) exObj._repsPrev=repsPrev;   // marca temporária p/ preencher o registro
+    mapa[dia].ex.push(exObj);
     n++;
   }
   if(!n) throw new Error('Nenhum exercício válido encontrado no arquivo.');
@@ -1531,7 +1555,20 @@ async function impArquivo(file){
     const {dias,n,avisos}=impMatriz(rows);
     const totalDias=dias.length;
     if(!confirm(`Carregar ${n} exercício(s) em ${totalDias} dia(s)?\n\nIsto SUBSTITUI a ficha atual deste aluno. Os registros de sessões já feitas são mantidos.`)) return;
-    S.train.plan=dias; S.train.day=0; save(); renderEditor();
+    S.train.plan=dias; S.train.day=0;
+    // pré-preenche o registro da sessão atual com as reps do treino anterior (se vieram no CSV)
+    let preench=0;
+    dias.forEach((d,di)=>{
+      d.ex.forEach((ex,ei)=>{
+        if(ex._repsPrev){
+          const k=S.train.session+'|'+di+'|'+ei;
+          S.train.entries[k]={reps:ex._repsPrev.slice(), effort:0};
+          preench++;
+        }
+        delete ex._repsPrev;   // limpa a marca temporária da estrutura
+      });
+    });
+    save(); renderEditor();
     let html='<b>Ficha carregada.</b> '+n+' exercício(s) em '+totalDias+' dia(s).';
     if(avisos.length){ html+='<br><b>Avisos:</b><ul>'+avisos.slice(0,8).map(a=>'<li>'+a+'</li>').join('')+'</ul>'; if(avisos.length>8) html+='<div>…e mais '+(avisos.length-8)+'.</div>'; }
     impMsg(html,'ok'); toast('Ficha carregada');
