@@ -734,16 +734,22 @@ async function cloudInit(){
     // no modo nuvem, a chave local é isolada por TOKEN (único por aluno),
     // evitando que abrir a ficha de um aluno sobrescreva a de outro no navegador
     KEY=KEY_BASE+'::cloud::'+token;
-    // adota os dados da nuvem (se houver), preservando estrutura padrão
+    // adota os dados da nuvem, preservando estrutura padrão
     if(row.dados && row.dados.gain){
       S=row.dados;
       if(!S.view)S.view='nutri';
       if(!S.train)S.train={session:1,day:0,plan:defaultPlan(),entries:{},wkMode:'log'};
       if(!S.train.plan)S.train.plan=defaultPlan();
       if(!S.train.wkMode)S.train.wkMode='log';
+    } else {
+      // aluno NOVO (sem dados na nuvem): começa limpo.
+      // Sem isto, herdaria o estado do aluno aberto antes neste navegador.
+      S=defaults();
+      S.train.wkMode='log';
     }
-    if(row.nome && !S.athlete) S.athlete=row.nome;
-    if(row.treinador && !S.coach) S.coach=row.treinador;
+    // a identidade é sempre a da nuvem — nunca a que sobrou do aluno anterior
+    S.athlete=row.nome||'';
+    S.coach=row.treinador||'';
     setCloudStatus('ok');
     return true;
   }catch(e){
@@ -1206,7 +1212,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v7 · 29/07/2026 · pdf+12col';
+const APP_VERSION='v8 · 29/07/2026 · correção nome aluno';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
