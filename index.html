@@ -422,9 +422,12 @@
 
     <section>
       <div class="sec-head"><span class="sec-num">01</span><span class="sec-title">Assistente de treino</span><span class="sec-hint">progressão por esforço percebido</span></div>
-      <div class="modes" role="tablist" aria-label="Modo de treino" style="margin-bottom:18px">
+      <div class="modes" role="tablist" aria-label="Modo de treino" style="margin-bottom:12px">
         <button class="mode" role="tab" id="wk-tab-log" aria-selected="true" onclick="setWkMode('log')">Registrar sessão</button>
         <button class="mode" role="tab" id="wk-tab-edit" aria-selected="false" onclick="setWkMode('edit')">Editar ficha</button>
+      </div>
+      <div style="margin-bottom:18px">
+        <button class="btn" onclick="exportarTreinoPDF()" style="font-size:12px">⤓ Exportar treino em PDF</button>
       </div>
 
       <!-- SUBVIEW: REGISTRAR -->
@@ -1436,7 +1439,100 @@ function renderWkMethod(){
     <p>Ao <b>Fechar sessão</b>, o app sobe a carga automaticamente nos exercícios em que todas as séries bateram o topo, e avança o contador.</p>`;
 }
 
-/* ---------- importador de ficha (CSV / XLSX) ---------- */
+/* ---------- exportar treino em PDF ---------- */
+// busca o último desempenho registrado de um exercício (maior sessão com dados)
+function ultimoDesempenho(dayIdx, exIdx){
+  const ent=S.train.entries||{};
+  let melhor=null, melhorSess=-1;
+  Object.keys(ent).forEach(k=>{
+    const p=k.split('|');
+    if(+p[1]===dayIdx && +p[2]===exIdx){
+      const e=ent[k];
+      const temReps=Array.isArray(e.reps) && e.reps.some(r=>r!==''&&r!=null&&isFinite(+r));
+      if((temReps || e.effort) && +p[0]>melhorSess){ melhorSess=+p[0]; melhor=e; }
+    }
+  });
+  return melhor;
+}
+function exportarTreinoPDF(){
+  const t=S.train;
+  if(!t || !t.plan || !t.plan.length){ toast('Nenhum treino para exportar'); return; }
+  const aluno=(S.athlete||'Aluno').replace(/</g,'&lt;');
+  const treinador=(S.coach||'').replace(/</g,'&lt;');
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const rpeLabel={1:'muito fácil',2:'fácil',3:'ideal',4:'difícil',5:'falha'};
+
+  let corpo='';
+  t.plan.forEach((dia,di)=>{
+    corpo+=`<div class="dia"><div class="dia-tit">${(dia.day||('Dia '+(di+1))).replace(/</g,'&lt;')}</div>`;
+    corpo+=`<table><thead><tr>
+      <th class="ex">Exercício</th><th>Grupo</th><th>Séries × Reps</th><th>Carga</th>
+      <th>Último desempenho</th><th>Esforço</th></tr></thead><tbody>`;
+    dia.ex.forEach((ex,ei)=>{
+      const d=ultimoDesempenho(di,ei);
+      let reps='—', esf='—';
+      if(d){
+        const rr=(d.reps||[]).filter(r=>r!==''&&r!=null&&isFinite(+r));
+        if(rr.length) reps=rr.join(' · ');
+        if(d.effort) esf=d.effort+' · '+(rpeLabel[d.effort]||'');
+      }
+      const carga=(+ex.load>0)?fmt(ex.load,1)+' kg':'—';
+      corpo+=`<tr>
+        <td class="ex">${(ex.name||'').replace(/</g,'&lt;')}</td>
+        <td>${(ex.group||'').replace(/</g,'&lt;')}</td>
+        <td>${ex.sets}×${ex.repLo}-${ex.repHi}</td>
+        <td>${carga}</td>
+        <td class="perf">${reps}</td>
+        <td class="rpe">${esf}</td>
+      </tr>`;
+    });
+    corpo+=`</tbody></table></div>`;
+  });
+
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Treino · ${aluno}</title>
+  <style>
+    @page{ size:A4; margin:14mm; }
+    *{ margin:0; padding:0; box-sizing:border-box; }
+    body{ font-family:'Helvetica Neue',Arial,sans-serif; color:#1a1a1a; }
+    .head{ text-align:center; border-bottom:2px solid #c8902f; padding-bottom:12px; margin-bottom:18px; }
+    .brand{ font-size:22px; font-weight:800; letter-spacing:.12em; color:#c8902f; }
+    .brand-sub{ font-size:10px; letter-spacing:.35em; color:#555; margin-top:3px; }
+    .meta{ display:flex; justify-content:space-between; font-size:11px; color:#444; margin:14px 2px 4px; }
+    .meta b{ color:#1a1a1a; }
+    .dia{ margin-bottom:16px; break-inside:avoid; }
+    .dia-tit{ font-size:13px; font-weight:700; color:#fff; background:#1a1a1a; padding:7px 11px;
+      border-radius:6px 6px 0 0; letter-spacing:.03em; }
+    table{ width:100%; border-collapse:collapse; font-size:10.5px; }
+    thead th{ background:#f0e6d2; color:#6b4d16; font-weight:700; text-align:left; padding:6px 8px;
+      border-bottom:1.5px solid #c8902f; font-size:9px; letter-spacing:.04em; text-transform:uppercase; }
+    tbody td{ padding:6px 8px; border-bottom:1px solid #e5e0d5; vertical-align:top; }
+    tbody tr:nth-child(even){ background:#faf8f3; }
+    td.ex, th.ex{ font-weight:600; min-width:130px; }
+    td.perf{ font-family:'DM Mono',monospace; font-weight:600; color:#1a1a1a; }
+    td.rpe{ color:#8f6420; white-space:nowrap; }
+    .foot{ margin-top:20px; text-align:center; font-size:9px; color:#888; border-top:1px solid #ddd; padding-top:9px; }
+    .legend{ font-size:9px; color:#999; margin-top:6px; }
+  </style></head><body>
+    <div class="head">
+      <div class="brand">SALOMÃO</div>
+      <div class="brand-sub">HEALTH &amp; FITNESS</div>
+    </div>
+    <div class="meta">
+      <div>Aluno: <b>${aluno}</b></div>
+      ${treinador?`<div>Treinador: <b>${treinador}</b></div>`:''}
+      <div>Emitido em <b>${hoje}</b></div>
+    </div>
+    ${corpo}
+    <div class="legend">Séries × Reps = faixa alvo · Último desempenho = reps de cada série na última sessão registrada · Esforço = percepção de 1 (fácil) a 5 (falha).</div>
+    <div class="foot">Salomão Health &amp; Fitness · Disciplina hoje, transformação amanhã</div>
+    <script>window.onload=function(){setTimeout(function(){window.print();},250);};<\/script>
+  </body></html>`;
+
+  const w=window.open('','_blank');
+  if(!w){ toast('Permita pop-ups para gerar o PDF'); return; }
+  w.document.write(html); w.document.close();
+}
+
 const IMP_MODELO=`Dia,Exercicio,Grupo,Series,RepMin,RepMax
 Dia 1,Supino reto,Peito,4,8,12
 Dia 1,Crucifixo inclinado,Peito,3,10,12
