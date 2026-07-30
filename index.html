@@ -1212,7 +1212,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v8 · 29/07/2026 · correção nome aluno';
+const APP_VERSION='v9 · 30/07/2026 · digitação sem salto';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -1373,12 +1373,12 @@ function renderTrain(){
       </div>
       <div class="ex-f" style="background:transparent;border:none;padding:0;margin-top:4px">
         <label>Esforço percebido do exercício</label>
-        <div class="rpe-row">
+        <div class="rpe-row" id="rpe-${t.day}-${ei}">
           ${[1,2,3,4,5].map(n=>`<button class="rpe-btn" aria-pressed="${e.effort===n}" onclick="wkEffort('${k}',${n})">${n}</button>`).join('')}
         </div>
         <div class="rpe-lbl"><span>1 · muito fácil</span><span>3 · ideal</span><span>5 · falha</span></div>
       </div>
-      <div class="verdict ${dec.cls}"><span class="ic">${dec.ic}</span><span><b>${dec.title}</b><span class="next">${dec.next}</span></span></div>`;
+      <div class="verdict ${dec.cls}" id="verdict-${t.day}-${ei}"><span class="ic">${dec.ic}</span><span><b>${dec.title}</b><span class="next">${dec.next}</span></span></div>`;
     box.appendChild(card);
   });
   renderWkMethod();
@@ -1389,20 +1389,46 @@ function ensureEntry(k){
   if(!Array.isArray(S.train.entries[k].reps)) S.train.entries[k].reps=[];
   return S.train.entries[k];
 }
+// Atualiza SOMENTE a sugestão de um exercício, sem recriar a tela.
+// Recriar tudo a cada tecla fazia o campo perder o foco e a página pular.
+function refreshVerdict(dayIdx,exIdx){
+  const t=S.train, day=t.plan[dayIdx]; if(!day) return;
+  const ex=day.ex[exIdx]; if(!ex) return;
+  const k=exKey(dayIdx,exIdx);
+  const e=t.entries[k]||{reps:[],effort:0};
+  if(!Array.isArray(e.reps)) e.reps=[];
+  const dec=decideProgression(ex, e.reps, e.effort, prevWasFail(dayIdx,exIdx));
+  const v=document.getElementById('verdict-'+dayIdx+'-'+exIdx);
+  if(v){
+    v.className='verdict '+dec.cls;
+    v.innerHTML=`<span class="ic">${dec.ic}</span><span><b>${dec.title}</b><span class="next">${dec.next}</span></span>`;
+    const card=v.parentElement;
+    if(card && card.classList.contains('ex-card')) card.classList.toggle('decided', dec.type!=='empty');
+  }
+}
 function wkEditSet(k,idx,val){
   const e=ensureEntry(k);
   e.reps[idx]= val===''? '' : val;
-  save(); renderTrain();
+  save();
+  const p=k.split('|');
+  refreshVerdict(+p[1],+p[2]);
 }
 function wkEdit(k,field,val){
   const e=ensureEntry(k);
   e[field]=val;
-  save(); renderTrain();
+  save();
+  const p=k.split('|');
+  refreshVerdict(+p[1],+p[2]);
 }
 function wkEffort(k,n){
   const e=ensureEntry(k);
   e.effort = e.effort===n?0:n;
-  save(); renderTrain();
+  save();
+  const p=k.split('|'), dayIdx=+p[1], exIdx=+p[2];
+  // atualiza só os botões de esforço deste exercício
+  const row=document.getElementById('rpe-'+dayIdx+'-'+exIdx);
+  if(row) row.querySelectorAll('.rpe-btn').forEach((b,i)=>b.setAttribute('aria-pressed', e.effort===(i+1)));
+  refreshVerdict(dayIdx,exIdx);
 }
 function wkResetDay(){
   const t=S.train;
