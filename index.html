@@ -96,6 +96,30 @@
   .ex-target b{color:var(--accent);font-weight:500}
   .ex-inputs{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:13px}
   .set-block{margin-bottom:13px}
+
+  /* controles de série e faixa (só treinador) */
+  .ex-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .tool-btn{font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:7px;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--ink-dim);cursor:pointer;transition:.15s}
+  .tool-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .tool-btn:disabled{opacity:.35;cursor:not-allowed}
+  .tool-btn:disabled:hover{border-color:var(--line);color:var(--ink-dim)}
+  .rng-box{display:flex;align-items:center;gap:5px;margin-left:auto;
+    font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+  .rng-box input{width:44px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+    color:var(--ink);font-family:var(--mono);font-size:12px;padding:4px 5px;text-align:center}
+  .rng-box input:focus{outline:none;border-color:var(--accent)}
+
+  /* sessão anterior */
+  .prev-box{margin-top:10px;background:var(--panel-2);border:1px solid var(--line);
+    border-left:2px solid var(--ink-faint);border-radius:9px;padding:9px 12px}
+  .prev-head{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-faint);margin-bottom:5px}
+  .prev-line{font-family:var(--mono);font-size:12px;color:var(--ink-dim);line-height:1.6}
+  .prev-line b{color:var(--ink)}
+  .prev-rec{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-top:4px;
+    padding-top:5px;border-top:1px dashed var(--line)}
+  .prev-rec b{color:var(--ink-dim)}
   .set-lbl{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:9px}
   .set-hint{color:var(--ink-faint);text-transform:none;letter-spacing:0;margin-left:6px}
   .set-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:8px}
@@ -1212,7 +1236,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v9 · 30/07/2026 · digitação sem salto';
+const APP_VERSION='v10 · 04/08/2026 · séries, faixa e sessão anterior';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -1357,14 +1381,27 @@ function renderTrain(){
           oninput="wkEditSet('${k}',${s},this.value)">
       </div>`;
     }
+    const coach=isCoachMode();
+    const tools = coach ? `
+      <div class="ex-tools">
+        <button class="tool-btn" onclick="exDelSet(${t.day},${ei})" ${nSets<=1?'disabled':''}>− série</button>
+        <button class="tool-btn" onclick="exAddSet(${t.day},${ei})" ${nSets>=5?'disabled':''}>+ série</button>
+        <span class="rng-box">faixa de reps
+          <input type="number" inputmode="numeric" min="1" value="${ex.repLo}" onchange="exSetRange(${t.day},${ei},'repLo',this.value)">
+          <span>–</span>
+          <input type="number" inputmode="numeric" min="1" value="${ex.repHi}" onchange="exSetRange(${t.day},${ei},'repHi',this.value)">
+        </span>
+      </div>` : '';
     card.innerHTML=`
       <div class="ex-top">
-        <div><div class="ex-name">${ex.name}</div><div class="ex-group">${ex.group} · ${nSets}×${ex.repLo}-${ex.repHi}</div></div>
+        <div><div class="ex-name">${ex.name}</div><div class="ex-group" id="exgrp-${t.day}-${ei}">${ex.group} · ${nSets}×${ex.repLo}-${ex.repHi}</div></div>
         <div class="ex-target">carga atual<br><b>${fmt(ex.load,1)} kg</b></div>
       </div>
+      ${blocoAnterior(t.day,ei)}
       <div class="set-block">
-        <label class="set-lbl">Reps por série <span class="set-hint">alvo: ${ex.repLo}–${ex.repHi} em todas</span></label>
+        <label class="set-lbl">Reps por série <span class="set-hint" id="exhint-${t.day}-${ei}">alvo: ${ex.repLo}–${ex.repHi} em todas</span></label>
         <div class="set-grid">${setInputs}</div>
+        ${tools}
         <div class="ex-f" style="background:transparent;border:none;padding:8px 0 0">
           <label>Carga usada (kg)</label>
           <input class="load-in" type="number" inputmode="decimal" step="0.5" value="${e.loadUsed??''}" placeholder="${fmt(ex.load,1)}"
@@ -1389,6 +1426,77 @@ function ensureEntry(k){
   if(!Array.isArray(S.train.entries[k].reps)) S.train.entries[k].reps=[];
   return S.train.entries[k];
 }
+// Busca a sessão ANTERIOR com dados deste exercício (a mais recente antes da atual)
+function sessaoAnterior(dayIdx,exIdx){
+  const ent=S.train.entries||{}, atual=S.train.session;
+  let achou=null, achouSess=-1;
+  Object.keys(ent).forEach(k=>{
+    const p=k.split('|');
+    if(+p[1]===dayIdx && +p[2]===exIdx && +p[0]<atual){
+      const e=ent[k];
+      const temReps=Array.isArray(e.reps)&&e.reps.some(r=>r!==''&&r!=null&&isFinite(+r));
+      if((temReps||e.effort)&&+p[0]>achouSess){ achouSess=+p[0]; achou={sess:+p[0],e}; }
+    }
+  });
+  return achou;
+}
+// HTML do bloco "sessão anterior" (vazio se não houver histórico)
+function blocoAnterior(dayIdx,exIdx){
+  const a=sessaoAnterior(dayIdx,exIdx);
+  if(!a) return '';
+  const e=a.e;
+  const rr=(e.reps||[]).filter(r=>r!==''&&r!=null&&isFinite(+r));
+  const reps=rr.length?rr.join(' · '):'—';
+  const rpe={1:'muito fácil',2:'fácil',3:'ideal',4:'difícil',5:'falha'};
+  const esf=e.effort?(e.effort+' · '+(rpe[e.effort]||'')):'—';
+  let carga='—';
+  if(e.snap&&isFinite(+e.snap.load)&&+e.snap.load>0) carga=fmt(e.snap.load,1)+' kg';
+  else if(e.loadUsed!==''&&e.loadUsed!=null&&isFinite(+e.loadUsed)) carga=fmt(+e.loadUsed,1)+' kg';
+  const rec=(e.snap&&e.snap.title)
+    ? `<div class="prev-rec">Recomendação dada: <b>${e.snap.title}</b>${e.snap.next?' — '+e.snap.next:''}</div>`
+    : '';
+  return `<div class="prev-box">
+    <div class="prev-head">Sessão anterior (nº ${a.sess})</div>
+    <div class="prev-line">Carga: <b>${carga}</b> · Reps: <b>${reps}</b> · Esforço: <b>${esf}</b></div>
+    ${rec}
+  </div>`;
+}
+// --- edição de séries e faixa de reps (somente treinador) ---
+function exAddSet(dayIdx,exIdx){
+  if(!isCoachMode()) return;
+  const ex=S.train.plan[dayIdx].ex[exIdx];
+  if((+ex.sets||3)>=5){ toast('Máximo de 5 séries'); return; }
+  ex.sets=(+ex.sets||3)+1;
+  save(); renderTrain();
+}
+function exDelSet(dayIdx,exIdx){
+  if(!isCoachMode()) return;
+  const ex=S.train.plan[dayIdx].ex[exIdx];
+  const n=+ex.sets||3;
+  if(n<=1){ toast('Mínimo de 1 série'); return; }
+  ex.sets=n-1;
+  // descarta a rep da série removida na sessão atual
+  const e=S.train.entries[exKey(dayIdx,exIdx)];
+  if(e&&Array.isArray(e.reps)) e.reps=e.reps.slice(0,ex.sets);
+  save(); renderTrain();
+}
+function exSetRange(dayIdx,exIdx,campo,val){
+  if(!isCoachMode()) return;
+  const ex=S.train.plan[dayIdx].ex[exIdx];
+  const v=parseInt(val,10);
+  if(!(v>0)) return;                       // ignora vazio/inválido enquanto digita
+  ex[campo]=v;
+  if(ex.repHi<ex.repLo){                   // mantém a faixa coerente
+    const t=ex.repLo; ex.repLo=ex.repHi; ex.repHi=t;
+  }
+  save();
+  const g=document.getElementById('exgrp-'+dayIdx+'-'+exIdx);
+  if(g) g.textContent=`${ex.group} · ${ex.sets}×${ex.repLo}-${ex.repHi}`;
+  const h=document.getElementById('exhint-'+dayIdx+'-'+exIdx);
+  if(h) h.textContent=`alvo: ${ex.repLo}–${ex.repHi} em todas`;
+  refreshVerdict(dayIdx,exIdx);
+}
+
 // Atualiza SOMENTE a sugestão de um exercício, sem recriar a tela.
 // Recriar tudo a cada tecla fazia o campo perder o foco e a página pular.
 function refreshVerdict(dayIdx,exIdx){
@@ -1443,7 +1551,10 @@ function wkCommit(){
     if(!e || !Array.isArray(e.reps) || e.reps.filter(r=>r!==''&&r!=null&&isFinite(+r)).length===0 || !e.effort) return;
     // se usou carga diferente da prescrita, adota a usada como base
     if(e.loadUsed!==''&&e.loadUsed!=null&&isFinite(+e.loadUsed)) ex.load=+e.loadUsed;
+    const cargaNaEpoca=+ex.load;
     const dec=decideProgression(ex,e.reps,e.effort,prevWasFail(t.day,ei));
+    // registra o que foi decidido, para o aluno consultar depois
+    e.snap={load:cargaNaEpoca, title:dec.title, next:dec.next};
     if(dec.deload){
       // 2ª falha seguida → reduzir carga ~10%
       ex.load=dec.deload.load; deloaded++;
