@@ -481,14 +481,14 @@
           <input type="file" id="imp-file" accept=".csv,.xlsx,.xls,text/csv" style="display:none" onchange="impArquivo(this.files[0])">
           <div class="imp-cols">
             Colunas obrigatórias: <b>Dia, Exercicio, Grupo, Series, RepMin, RepMax</b><br>
-            Colunas opcionais (histórico): <b>Carga, Reps1…Reps5</b> — se preenchidas, a carga vira a carga de trabalho e as reps já entram no registro da sessão (editáveis). Sem elas, os campos ficam vazios. O incremento é definido pelo grupo (inferiores 5 kg · superiores 2,5 kg).
+            Colunas opcionais (histórico): <b>Carga, Reps1…Reps5</b> — se preenchidas, a carga vira a carga de trabalho e as reps já entram no registro da sessão (editáveis). Sem elas, os campos ficam vazios. O degrau do equipamento é definido pelo grupo (inferiores 5 kg · superiores 2,5 kg) e pode ser ajustado por exercício.
           </div>
           <div class="imp-actions">
             <button class="btn" onclick="impModelo()">Baixar modelo CSV</button>
           </div>
           <div class="imp-result" id="imp-result"></div>
         </div>
-        <div class="ed-note">Ou edite manualmente abaixo: nome do exercício, grupo, séries, faixa de reps, carga e incremento. Tudo salvo automaticamente por aluno.</div>
+        <div class="ed-note">Ou edite manualmente abaixo. <b>Degrau</b> = menor acréscimo possível naquele equipamento (anilha/pino). O aumento sugerido é calculado como % da carga (≈5% inferiores, ≈3% superiores, base Helms) e arredondado para múltiplos desse degrau.</div>
         <div id="wk-editor"></div>
         <div class="ed-toolbar" style="margin-top:14px">
           <button class="btn primary" onclick="edAddDay()">+ Adicionar dia</button>
@@ -644,13 +644,36 @@ function defaults(){
     mode:'gain',
     gain:{ peso:'', alvo:'', manut:'', intensidade:'moderado', pctMagra:72, protKg:2.0, gordKg:1.0, log:[{peso:''}] },
     cut:{  peso:'', alvo:'', manut:'', intensidade:'moderado', protKg:2.0, gordKg:0.65, log:[{peso:''}] },
-    train:{ session:1, day:0, plan:defaultPlan(), entries:{} }
+    train:{ session:1, day:0, plan:defaultPlan(), entries:{}, sessByDay:{} }
   };
 }
-// Ficha base (dupla progressão). repLo/repHi = faixa de reps alvo; inc = incremento de carga (kg).
-// Incremento por região: membros inferiores = 5 kg; superiores/tronco = 2,5 kg (Helms: menor incremento p/ carga absoluta baixa)
+// Ficha base (dupla progressão). repLo/repHi = faixa de reps alvo; inc = MENOR DEGRAU do equipamento (kg).
+// Padrão por região: membros inferiores = 5 kg; superiores/tronco = 2,5 kg. O aumento efetivo é relativo à carga (ver incSugerido).
 const LOWER_GROUPS=['Quadríceps','Ísquios','Glúteo','Panturrilha','Adutores','Abdutores','Posterior'];
 function incFor(group){ return LOWER_GROUPS.includes(group) ? 5 : 2.5; }
+/* INCREMENTO RELATIVO (base: Helms, Muscle & Strength Pyramid)
+   O salto de carga não é fixo: é uma fração da carga que o aluno realmente usa.
+   Helms trabalha o problema em termos percentuais (ex.: 20→25 lb numa elevação lateral
+   é +25%, grande demais; já 245→250 lb num agachamento é +2%, adequado).
+   Alvo: ~5% em membros inferiores e ~3% em superiores — faixa compatível com os
+   exemplos de progressão do livro (2–5% nas cargas altas).
+   O valor é então arredondado para o MENOR DEGRAU disponível no equipamento (ex.inc),
+   porque não se adiciona 1,7 kg numa barra. Se nem o menor degrau couber no alvo,
+   o salto fica grande demais e a regra de alargar a faixa de reps entra em ação. */
+const PCT_INC_LOWER=0.05, PCT_INC_UPPER=0.03;
+function pctAlvoInc(group){ return LOWER_GROUPS.includes(group)?PCT_INC_LOWER:PCT_INC_UPPER; }
+function passoEquip(ex){
+  const p=+ex.inc;
+  return p>0 ? p : incFor(ex.group);
+}
+function incSugerido(ex){
+  const load=+ex.load||0;
+  const passo=passoEquip(ex);
+  if(!(load>0)) return passo;
+  const alvo=load*pctAlvoInc(ex.group);
+  const n=Math.max(1, Math.round(alvo/passo));   // nº de degraus mais próximo do alvo
+  return +(n*passo).toFixed(2);
+}
 function defaultPlan(){
   // inc opcional: se omitido, deriva pela região do grupo muscular
   const F=(group,name,sets,repLo,repHi,load,inc)=>({group,name,sets,repLo,repHi,load,inc:(inc!=null?inc:incFor(group)),incAuto:(inc==null)});
@@ -1236,7 +1259,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v10 · 04/08/2026 · séries, faixa e sessão anterior';
+const APP_VERSION='v11 · 06/08/2026 · sessão por dia + incremento relativo';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -1260,8 +1283,25 @@ function setView(v){
 }
 
 // chave de registro por exercício/sessão
-function exKey(dayIdx,exIdx){ return S.train.session+'|'+dayIdx+'|'+exIdx; }
-function prevKey(dayIdx,exIdx){ return (S.train.session-1)+'|'+dayIdx+'|'+exIdx; }
+// Sessão é contada POR DIA de treino: fechar o Dia 1 não avança o contador do Dia 2.
+function sessOf(dayIdx){
+  const t=S.train;
+  if(!t.sessByDay || typeof t.sessByDay!=='object') return +t.session||1;
+  const v=t.sessByDay[dayIdx];
+  return (v>0)?+v:(+t.session||1);
+}
+// migração: fichas antigas tinham um contador único e global
+function normalizeSessions(){
+  const t=S.train; if(!t) return;
+  if(!t.sessByDay || typeof t.sessByDay!=='object'){
+    t.sessByDay={};
+    const base=+t.session||1;
+    (t.plan||[]).forEach((d,i)=>{ t.sessByDay[i]=base; });   // preserva as chaves já gravadas
+  }
+  (t.plan||[]).forEach((d,i)=>{ if(!(t.sessByDay[i]>0)) t.sessByDay[i]=1; });
+}
+function exKey(dayIdx,exIdx){ return sessOf(dayIdx)+'|'+dayIdx+'|'+exIdx; }
+function prevKey(dayIdx,exIdx){ return (sessOf(dayIdx)-1)+'|'+dayIdx+'|'+exIdx; }
 // A sessão anterior deste exercício foi falha (esforço 5)?
 function prevWasFail(dayIdx,exIdx){
   const pe=S.train.entries[prevKey(dayIdx,exIdx)];
@@ -1286,7 +1326,7 @@ function decideProgression(ex, repsArr, effort, prevFailed){
   if(filled.length===0 || !effort){
     return {type:'empty', cls:'empty', ic:'○', title:'Aguardando dados', next:`Informe as reps de cada série e o esforço para receber a sugestão.`};
   }
-  const load=+ex.load||0, inc=+ex.inc||2.5;
+  const load=+ex.load||0, inc=incSugerido(ex);
   const nSets=+ex.sets||filled.length;
   const allReported = filled.length>=nSets;
   const allAtTop = filled.length>0 && filled.every(v=>v>=repHi) && allReported;
@@ -1352,7 +1392,8 @@ const RPE_LABELS={1:'muito fácil',2:'fácil',3:'ideal',4:'difícil',5:'falha'};
 
 function renderTrain(){
   const t=S.train;
-  document.getElementById('wk-sess').textContent=t.session;
+  normalizeSessions();
+  document.getElementById('wk-sess').textContent=sessOf(t.day);
   // day nav
   const nav=document.getElementById('wk-day-nav'); nav.innerHTML='';
   t.plan.forEach((d,i)=>{
@@ -1428,7 +1469,7 @@ function ensureEntry(k){
 }
 // Busca a sessão ANTERIOR com dados deste exercício (a mais recente antes da atual)
 function sessaoAnterior(dayIdx,exIdx){
-  const ent=S.train.entries||{}, atual=S.train.session;
+  const ent=S.train.entries||{}, atual=sessOf(dayIdx);
   let achou=null, achouSess=-1;
   Object.keys(ent).forEach(k=>{
     const p=k.split('|');
@@ -1506,6 +1547,12 @@ function refreshVerdict(dayIdx,exIdx){
   const e=t.entries[k]||{reps:[],effort:0};
   if(!Array.isArray(e.reps)) e.reps=[];
   const dec=decideProgression(ex, e.reps, e.effort, prevWasFail(dayIdx,exIdx));
+  // registra a recomendação assim que ela existe (não só ao fechar a sessão),
+  // para que fique consultável como histórico na sessão seguinte
+  if(dec.type!=='empty' && t.entries[k]){
+    const usada=(e.loadUsed!==''&&e.loadUsed!=null&&isFinite(+e.loadUsed))?+e.loadUsed:(+ex.load||0);
+    e.snap={load:usada, title:dec.title, next:dec.next, cls:dec.cls, ic:dec.ic};
+  }
   const v=document.getElementById('verdict-'+dayIdx+'-'+exIdx);
   if(v){
     v.className='verdict '+dec.cls;
@@ -1517,26 +1564,26 @@ function refreshVerdict(dayIdx,exIdx){
 function wkEditSet(k,idx,val){
   const e=ensureEntry(k);
   e.reps[idx]= val===''? '' : val;
-  save();
   const p=k.split('|');
-  refreshVerdict(+p[1],+p[2]);
+  refreshVerdict(+p[1],+p[2]);   // gera e grava a recomendação
+  save();                        // salva depois, já com o snapshot
 }
 function wkEdit(k,field,val){
   const e=ensureEntry(k);
   e[field]=val;
-  save();
   const p=k.split('|');
   refreshVerdict(+p[1],+p[2]);
+  save();
 }
 function wkEffort(k,n){
   const e=ensureEntry(k);
   e.effort = e.effort===n?0:n;
-  save();
   const p=k.split('|'), dayIdx=+p[1], exIdx=+p[2];
   // atualiza só os botões de esforço deste exercício
   const row=document.getElementById('rpe-'+dayIdx+'-'+exIdx);
   if(row) row.querySelectorAll('.rpe-btn').forEach((b,i)=>b.setAttribute('aria-pressed', e.effort===(i+1)));
-  refreshVerdict(dayIdx,exIdx);
+  refreshVerdict(dayIdx,exIdx);   // gera e grava a recomendação
+  save();                         // salva já com o snapshot
 }
 function wkResetDay(){
   const t=S.train;
@@ -1562,15 +1609,18 @@ function wkCommit(){
       // alargar a faixa de reps em vez de subir carga
       ex.repHi=dec.widen.repHi; widened++;
     } else if(dec.addLoad){
-      ex.load=+ex.load+(+ex.inc||2.5);
+      ex.load=+(+ex.load+incSugerido(ex)).toFixed(2);
     }
   });
-  t.session+=1;
+  normalizeSessions();
+  const antes=sessOf(t.day);
+  t.sessByDay[t.day]=antes+1;
+  t.session=Math.max(+t.session||1, t.sessByDay[t.day]);   // compat.
   save(); renderTrain();
   let extra='';
   if(deloaded) extra+=' · '+deloaded+' deload';
   if(widened) extra+=' · '+widened+' faixa(s) ampliada(s)';
-  toast('Sessão '+(t.session-1)+' fechada'+extra+' · agora na '+t.session);
+  toast('Sessão '+antes+' de "'+(day.day||('Dia '+(t.day+1)))+'" fechada'+extra+' · agora na '+(antes+1));
 }
 
 function renderWkMethod(){
@@ -1802,8 +1852,10 @@ async function impArquivo(file){
     dias.forEach((d,di)=>{
       d.ex.forEach((ex,ei)=>{
         if(ex._repsPrev){
-          const k=S.train.session+'|'+di+'|'+ei;
-          S.train.entries[k]={reps:ex._repsPrev.slice(), effort:0};
+          const k=sessOf(di)+'|'+di+'|'+ei;
+          const en={reps:ex._repsPrev.slice(), effort:0};
+          if(+ex.load>0) en.loadUsed=+ex.load;   // carga do CSV vira a carga registrada
+          S.train.entries[k]=en;
           preench++;
         }
         delete ex._repsPrev;   // limpa a marca temporária da estrutura
@@ -1939,7 +1991,7 @@ function renderEditor(){
         <input value="${escAttr(d.day)}" oninput="edDayName(${di},this.value)" placeholder="Nome do dia">
         <button class="ed-del" title="Remover dia" onclick="edDelDay(${di})">✕</button>
       </div>
-      <div class="ed-row head"><span>Exercício</span><span>Grupo</span><span>Séries</span><span>Reps</span><span>Carga</span><span>Incr.</span><span></span></div>`;
+      <div class="ed-row head"><span>Exercício</span><span>Grupo</span><span>Séries</span><span>Reps</span><span>Carga</span><span>Degrau</span><span></span></div>`;
     d.ex.forEach((ex,ei)=>{
       rows+=`<div class="ed-row">
         <input value="${escAttr(ex.name)}" oninput="edEx(${di},${ei},'name',this.value)" placeholder="Nome">
@@ -2058,7 +2110,7 @@ const METHODOLOGY=[
  ['Proteína','2,0 g/kg de peso corporal. É a alavanca central da retenção de massa magra em déficit, junto com o treino de força mantido.'],
  ['Ritmo de ajuste','Uma semana fora da faixa = aguardar a próxima medição (pode ser água). Duas semanas seguidas = agir. Helms ajusta a nutrição cerca de 2× por mês, não a cada oscilação da balança.'],
  ['Diet break','Após duas semanas estagnadas: uma semana em manutenção para ressensibilizar, e depois retomar. Nunca apenas "cortar mais" — crítica central de Wilson ao ciclo de suprimir o metabolismo.'],
- ['Progressão de carga','Dupla progressão (Helms): a carga só sobe quando <b>todas as séries</b> atingem o topo da faixa de reps. Se o incremento representar um salto percentual grande, amplia-se a faixa de reps em vez de forçar o peso.'],
+ ['Progressão de carga','Dupla progressão (Helms): a carga só sobe quando <b>todas as séries</b> atingem o topo da faixa de reps. O aumento não é fixo — é <b>relativo à carga usada</b> (≈5% em membros inferiores, ≈3% em superiores), arredondado para o menor degrau disponível no equipamento. Se ainda assim o salto ficar grande demais (como numa elevação lateral leve), amplia-se a faixa de reps em vez de forçar o peso.'],
  ['Deload','Falhar (esforço máximo sem atingir o alvo) em duas sessões seguidas dispara redução de ~10% na carga, para ressensibilizar e retomar a progressão.'],
  ['Monitoramento','Média semanal do peso + fotos + força nos exercícios-chave (Barakat). Nunca decidir por um único dia na balança.'],
 ];
@@ -2077,6 +2129,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
 
 (async function boot(){
   await cloudInit();           // se o link tiver token, carrega da nuvem
+  normalizeSessions();         // migra contador global → por dia, se necessário
   applyCoachUI();              // esconde edição de ficha se for aluno
   renderIdentity();
   setMode(S.mode);
