@@ -93,6 +93,12 @@
   .ex-name{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:17px;line-height:1.15;letter-spacing:.01em}
   .ex-group{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.05em;text-transform:uppercase;margin-top:3px}
   .ex-target{font-family:var(--mono);font-size:12px;color:var(--ink-dim);text-align:right;white-space:nowrap;line-height:1.6}
+  .cur-in{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;color:var(--accent);
+    font-family:var(--mono);font-size:15px;font-weight:600;padding:5px 7px;width:76px;text-align:right;
+    margin-top:2px;-moz-appearance:textfield}
+  .cur-in:focus{outline:none;border-color:var(--accent)}
+  .cur-in::-webkit-outer-spin-button,.cur-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .cur-unit{font-size:11px;color:var(--ink-faint);margin-left:3px}
   .ex-target b{color:var(--accent);font-weight:500}
   .ex-inputs{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:13px}
   .set-block{margin-bottom:13px}
@@ -1259,7 +1265,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v11 · 06/08/2026 · sessão por dia + incremento relativo';
+const APP_VERSION='v12 · 07/08/2026 · carga editável na sessão';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -1436,7 +1442,11 @@ function renderTrain(){
     card.innerHTML=`
       <div class="ex-top">
         <div><div class="ex-name">${ex.name}</div><div class="ex-group" id="exgrp-${t.day}-${ei}">${ex.group} · ${nSets}×${ex.repLo}-${ex.repHi}</div></div>
-        <div class="ex-target">carga atual<br><b>${fmt(ex.load,1)} kg</b></div>
+        <div class="ex-target">carga atual<br>
+          <input class="cur-in" type="number" inputmode="decimal" step="0.5" min="0"
+                 value="${+ex.load||0}" title="Ajuste a carga de trabalho se estiver leve ou pesada demais"
+                 oninput="wkSetLoad(${t.day},${ei},this.value)"><span class="cur-unit">kg</span>
+        </div>
       </div>
       ${blocoAnterior(t.day,ei)}
       <div class="set-block">
@@ -1445,7 +1455,7 @@ function renderTrain(){
         ${tools}
         <div class="ex-f" style="background:transparent;border:none;padding:8px 0 0">
           <label>Carga usada (kg)</label>
-          <input class="load-in" type="number" inputmode="decimal" step="0.5" value="${e.loadUsed??''}" placeholder="${fmt(ex.load,1)}"
+          <input class="load-in" id="usada-${t.day}-${ei}" type="number" inputmode="decimal" step="0.5" value="${e.loadUsed??''}" placeholder="${fmt(ex.load,1)}"
             oninput="wkEdit('${k}','loadUsed',this.value)">
         </div>
       </div>
@@ -1536,6 +1546,22 @@ function exSetRange(dayIdx,exIdx,campo,val){
   const h=document.getElementById('exhint-'+dayIdx+'-'+exIdx);
   if(h) h.textContent=`alvo: ${ex.repLo}–${ex.repHi} em todas`;
   refreshVerdict(dayIdx,exIdx);
+}
+
+/* Ajuste manual da carga de trabalho, direto na sessão.
+   Aberto ao aluno E ao treinador: a sugestão de incremento é um ponto de partida,
+   mas quem está debaixo da barra sabe se o peso ficou leve ou pesado demais. */
+function wkSetLoad(dayIdx,exIdx,val){
+  const day=S.train.plan[dayIdx]; if(!day) return;
+  const ex=day.ex[exIdx]; if(!ex) return;
+  const v=parseFloat(String(val).replace(',','.'));
+  if(!isFinite(v)||v<0) return;              // ignora enquanto o campo está vazio/inválido
+  ex.load=v;
+  // o campo "carga usada" mostra a carga de trabalho como sugestão
+  const u=document.getElementById('usada-'+dayIdx+'-'+exIdx);
+  if(u) u.placeholder=fmt(v,1);
+  refreshVerdict(dayIdx,exIdx);              // recalcula a sugestão com a nova carga
+  save();
 }
 
 // Atualiza SOMENTE a sugestão de um exercício, sem recriar a tela.
