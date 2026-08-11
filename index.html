@@ -1135,11 +1135,11 @@ function renderLog(c){
   let html=`<thead><tr>
     <th>Sem</th><th>Peso real</th><th>Projetado</th><th>Δ real</th><th>Desvio</th><th>Ação sugerida</th>
   </tr></thead><tbody>`;
-  let prevDev=null;
+  let prevAdv=null;
   log.forEach((row,i)=>{
     const projW = proj[i]!=null?proj[i]:null;
     const has = row.peso!==''&&row.peso!=null&&isFinite(+row.peso);
-    let deltaReal='', desvio='', flag='', flagClass='', dev=null;
+    let deltaReal='', desvio='', flag='', flagClass='', dev=null, adv=null;
     if(has){
       const cur=+row.peso;
       let prevW=null;
@@ -1150,7 +1150,8 @@ function renderLog(c){
         const expSigned = dirGain? perStep : -perStep;
         dev = dr - expSigned;
         desvio=(dev>=0?'+':'')+fmt(dev,2);
-        [flag,flagClass]=decide(i,dirGain,dev,TOL,prevDev);
+        adv = dirGain ? dev : -dev;      // normaliza pela direção do objetivo
+        [flag,flagClass]=decide(i,dirGain,adv,TOL,prevAdv);
       }
     }
     if(i===0 && !has){ flag='▶ Ponto de partida'; flagClass='start'; }
@@ -1164,25 +1165,29 @@ function renderLog(c){
       <td class="proj">${desvio||'—'}</td>
       <td>${flag?`<span class="flag ${flagClass}">${flag}</span>`:'—'}</td>
     </tr>`;
-    prevDev = dev;
+    prevAdv = adv;
   });
   html+=`</tbody>`;
   t.innerHTML=html;
 }
 
-function decide(i,dirGain,dev,TOL,prevDev){
-  // dev>0 => moved MORE than expected (gain: too fast/fat; cut: too fast/muscle-risk)
-  const twoBad = (prevDev!=null && Math.sign(prevDev)===Math.sign(dev) && Math.abs(prevDev)>TOL);
-  if(dev>TOL){ // more than expected
+function decide(i,dirGain,adv,TOL,prevAdv){
+  /* adv = avanço em relação ao previsto, JÁ NORMALIZADO pela direção do objetivo:
+     adv > 0  → andou MAIS rápido que o previsto rumo à meta
+     adv < 0  → andou MAIS devagar (ou foi na direção contrária)
+     Normalizar é essencial: no cutting o peso cai, então um desvio negativo em kg
+     significa perder MAIS que o previsto — o oposto do que vale no ganho. */
+  const twoBad = (prevAdv!=null && Math.sign(prevAdv)===Math.sign(adv) && Math.abs(prevAdv)>TOL);
+  if(adv>TOL){ // mais rápido que o previsto
     if(dirGain){
-      return twoBad?['⛔ 2ª sem. rápida — reduzir ~100-150 kcal','alert']:['⚠ Acima do previsto — aguardar próxima medição','warn'];
+      return twoBad?['⛔ 2ª sem. rápida — reduzir ~100-150 kcal','alert']:['⚠ Ganho acima do previsto — aguardar (pode ser água)','warn'];
     }else{
       return twoBad?['⛔ 2ª sem. rápida — subir ~150-200 kcal (poupar músculo)','alert']:['⚠ Perda acima do previsto — aguardar (pode ser água)','warn'];
     }
   }
-  if(dev<-TOL){ // less than expected
+  if(adv<-TOL){ // mais devagar que o previsto
     if(dirGain){
-      return twoBad?['⛔ 2ª sem. sem ganho — subir ~100-150 kcal','alert']:['⚠ Abaixo do previsto — aguardar próxima medição','warn'];
+      return twoBad?['⛔ 2ª sem. sem ganho — subir ~100-150 kcal','alert']:['⚠ Ganho abaixo do previsto — aguardar próxima medição','warn'];
     }else{
       return twoBad?['⛔ 2ª sem. estagnada — diet break + rever kcal/cardio','alert']:['⚠ Perda abaixo do previsto — aguardar próxima medição','warn'];
     }
@@ -1212,14 +1217,15 @@ function updateFlags(){
   const rows=document.querySelectorAll('#logtable tbody tr');
   log.forEach((row,i)=>{
     const has=row.peso!==''&&row.peso!=null&&isFinite(+row.peso);
-    let deltaReal='—',desvio='—',flag='—',flagClass='',drClass='',dev=null;
+    let deltaReal='—',desvio='—',flag='—',flagClass='',drClass='',dev=null,adv=null;
     if(has){
       const cur=+row.peso; let prevW=null;
       if(i===0) prevW=c.peso; else {for(let j=i-1;j>=0;j--){if(log[j].peso!==''&&isFinite(+log[j].peso)){prevW=+log[j].peso;break;}}}
       if(prevW!=null){
         const dr=cur-prevW; deltaReal=(dr>=0?'+':'')+fmt(dr,2);
         const expSigned=dirGain?perStep:-perStep; dev=dr-expSigned; desvio=(dev>=0?'+':'')+fmt(dev,2);
-        [flag,flagClass]=decide(i,dirGain,dev,TOL,prev);
+        adv = dirGain ? dev : -dev;      // normaliza pela direção do objetivo
+        [flag,flagClass]=decide(i,dirGain,adv,TOL,prev);
         drClass=dr>=0?'pos':'neg';
       }
     }
@@ -1231,7 +1237,7 @@ function updateFlags(){
       tds[4].textContent = desvio;
       tds[5].innerHTML = flag!=='—'?`<span class="flag ${flagClass}">${flag}</span>`:'—';
     }
-    prev = dev;
+    prev = adv;
   });
 }
 function resetAll(){
@@ -1270,7 +1276,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v13 · 11/08/2026 · edição não avança sessão';
+const APP_VERSION='v14 · 11/08/2026 · desvio semanal corrigido';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
