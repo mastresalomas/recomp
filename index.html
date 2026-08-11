@@ -232,6 +232,20 @@
   .imp-result.bad{background:rgba(248,113,113,.10);color:var(--alert)}
   .imp-result ul{margin:6px 0 0 16px}
 
+  /* observação da sessão */
+  .note-block{margin-top:12px}
+  .note-block label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px}
+  .note-in{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;
+    color:var(--ink);font-family:var(--disp);font-size:13px;line-height:1.45;padding:8px 10px;
+    resize:vertical;min-height:38px}
+  .note-in:focus{outline:none;border-color:var(--accent)}
+  .note-in::placeholder{color:var(--ink-faint)}
+  .prev-note{font-family:var(--disp);font-size:11.5px;color:var(--ink-dim);margin-top:5px;
+    padding-top:5px;border-top:1px dashed var(--line);line-height:1.5}
+  .prev-note b{color:var(--ink-faint);font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;display:block;margin-bottom:2px}
+
   /* MODE TOGGLE */
   .modes{display:flex;gap:6px;margin-top:22px;background:var(--panel);border:1px solid var(--line);
          border-radius:12px;padding:5px;width:fit-content}
@@ -1319,7 +1333,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v15 · 11/08/2026 · sincronia entre aparelhos';
+const APP_VERSION='v16 · 11/08/2026 · observações por exercício';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -1520,6 +1534,11 @@ function renderTrain(){
         </div>
         <div class="rpe-lbl"><span>1 · muito fácil</span><span>3 · ideal</span><span>5 · falha</span></div>
       </div>
+      <div class="note-block">
+        <label>Observações desta sessão</label>
+        <textarea class="note-in" rows="2" placeholder="Como foi? Ex.: ombro incomodou, troquei de aparelho, senti bem o músculo…"
+          oninput="wkNote('${k}',this.value)">${esc(e.note||'')}</textarea>
+      </div>
       <div class="verdict ${dec.cls}" id="verdict-${t.day}-${ei}"><span class="ic">${dec.ic}</span><span><b>${dec.title}</b><span class="next">${dec.next}</span></span></div>`;
     box.appendChild(card);
   });
@@ -1560,10 +1579,14 @@ function blocoAnterior(dayIdx,exIdx){
   const rec=(e.snap&&e.snap.title)
     ? `<div class="prev-rec">Recomendação dada: <b>${e.snap.title}</b>${e.snap.next?' — '+e.snap.next:''}</div>`
     : '';
+  const nota=(e.note&&String(e.note).trim())
+    ? `<div class="prev-note"><b>Sua observação</b>${esc(e.note)}</div>`
+    : '';
   return `<div class="prev-box">
     <div class="prev-head">Sessão anterior (nº ${a.sess})</div>
     <div class="prev-line">Carga: <b>${carga}</b> · Reps: <b>${reps}</b> · Esforço: <b>${esf}</b></div>
     ${rec}
+    ${nota}
   </div>`;
 }
 // --- edição de séries e faixa de reps (somente treinador) ---
@@ -1615,6 +1638,21 @@ function wkSetLoad(dayIdx,exIdx,val){
   const u=document.getElementById('usada-'+dayIdx+'-'+exIdx);
   if(u) u.placeholder=fmt(v,1);
   refreshVerdict(dayIdx,exIdx);              // recalcula a sugestão com a nova carga
+  save();
+}
+
+// escapa texto do usuário antes de injetar no HTML
+function esc(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+/* Observação da sessão: diário do aluno para aquele exercício naquele dia.
+   Não recria a tela ao digitar (senão o campo perderia o foco a cada tecla)
+   e não entra no cálculo da progressão — é registro, não parâmetro. */
+function wkNote(k,val){
+  const e=ensureEntry(k);
+  e.note=val;
   save();
 }
 
@@ -1756,11 +1794,12 @@ function exportarTreinoPDF(){
     corpo+=`<div class="dia"><div class="dia-tit">${(dia.day||('Dia '+(di+1))).replace(/</g,'&lt;')}</div>`;
     corpo+=`<table><thead><tr>
       <th class="ex">Exercício</th><th>Grupo</th><th>Séries × Reps</th><th>Carga</th>
-      <th>Último desempenho</th><th>Esforço</th></tr></thead><tbody>`;
+      <th>Último desempenho</th><th>Esforço</th><th>Observação</th></tr></thead><tbody>`;
     dia.ex.forEach((ex,ei)=>{
       const d=ultimoDesempenho(di,ei);
-      let reps='—', esf='—';
+      let reps='—', esf='—', obs='';
       if(d){
+        if(d.note && String(d.note).trim()) obs=String(d.note).trim();
         const rr=(d.reps||[]).filter(r=>r!==''&&r!=null&&isFinite(+r));
         if(rr.length) reps=rr.join(' · ');
         if(d.effort) esf=d.effort+' · '+(rpeLabel[d.effort]||'');
@@ -1773,6 +1812,7 @@ function exportarTreinoPDF(){
         <td>${carga}</td>
         <td class="perf">${reps}</td>
         <td class="rpe">${esf}</td>
+        <td class="obs">${obs?obs.replace(/</g,'&lt;'):'—'}</td>
       </tr>`;
     });
     corpo+=`</tbody></table></div>`;
@@ -1799,6 +1839,7 @@ function exportarTreinoPDF(){
     td.ex, th.ex{ font-weight:600; min-width:130px; }
     td.perf{ font-family:'DM Mono',monospace; font-weight:600; color:#1a1a1a; }
     td.rpe{ color:#8f6420; white-space:nowrap; }
+    td.obs{ color:#555; font-size:9.5px; font-style:italic; max-width:150px; }
     .foot{ margin-top:20px; text-align:center; font-size:9px; color:#888; border-top:1px solid #ddd; padding-top:9px; }
     .legend{ font-size:9px; color:#999; margin-top:6px; }
   </style></head><body>
@@ -1812,7 +1853,7 @@ function exportarTreinoPDF(){
       <div>Emitido em <b>${hoje}</b></div>
     </div>
     ${corpo}
-    <div class="legend">Séries × Reps = faixa alvo · Último desempenho = reps de cada série na última sessão registrada · Esforço = percepção de 1 (fácil) a 5 (falha).</div>
+    <div class="legend">Séries × Reps = faixa alvo · Último desempenho = reps de cada série na última sessão registrada · Esforço = percepção de 1 (fácil) a 5 (falha) · Observação = nota do aluno na sessão.</div>
     <div class="foot">Salomão Health &amp; Fitness · Disciplina hoje, transformação amanhã</div>
     <script>window.onload=function(){setTimeout(function(){window.print();},250);};<\/script>
   </body></html>`;
