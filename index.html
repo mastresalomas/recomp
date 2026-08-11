@@ -499,6 +499,11 @@
         <div class="ed-toolbar" style="margin-top:14px">
           <button class="btn primary" onclick="edAddDay()">+ Adicionar dia</button>
           <button class="btn ghost" onclick="edResetPlan()">Restaurar ficha padrão</button>
+          <button class="btn" onclick="edConcluir()">✓ Concluir edição</button>
+        </div>
+        <div class="ed-note" style="margin-top:10px;opacity:.75">
+          As alterações da ficha são <b>salvas automaticamente</b> — não existe botão de salvar.
+          <b>Não use “Fechar sessão”</b> para encerrar a edição: aquele botão avança a contagem de treinos do aluno.
         </div>
       </div>
     </section>
@@ -1265,7 +1270,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v12 · 07/08/2026 · carga editável na sessão';
+const APP_VERSION='v13 · 11/08/2026 · edição não avança sessão';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -1616,8 +1621,22 @@ function wkResetDay(){
   t.plan[t.day].ex.forEach((_,ei)=>{ delete t.entries[exKey(t.day,ei)]; });
   save(); renderTrain(); toast('Dia limpo');
 }
+/* Encerra a edição de ficha sem tocar na contagem de sessões do aluno.
+   Existe porque, sem um botão próprio aqui, o treinador acabava usando
+   "Fechar sessão" — que avança o treino do aluno indevidamente. */
+function edConcluir(){
+  save();
+  toast('Ficha salva · sessão do aluno inalterada');
+  setWkMode('log');
+}
 function wkCommit(){
   const t=S.train, day=t.plan[t.day];
+  // Salvaguarda: em modo treinador, avançar a sessão mexe no histórico do aluno.
+  // A edição de ficha NÃO precisa disto — ela é salva sozinha.
+  if(isCoachMode() && cloudToken()){
+    const nome=(day && day.day) ? day.day : ('Dia '+(t.day+1));
+    if(!confirm('Isto vai FECHAR a sessão '+sessOf(t.day)+' de "'+nome+'" e avançar a contagem de treinos do aluno.\n\nSe você só editou a ficha, NÃO é necessário — as alterações já foram salvas.\n\nFechar a sessão mesmo assim?')) return;
+  }
   let widened=0, deloaded=0;
   day.ex.forEach((ex,ei)=>{
     const e=t.entries[exKey(t.day,ei)];
