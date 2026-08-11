@@ -600,6 +600,9 @@ function isCoachMode(){
 let CLOUD_ON=false;      // ligado quando há token válido
 let cloudRow=null;       // registro do cliente na nuvem
 let syncTimer=null, syncing=false;
+let lastSyncAt=null;     // 'atualizado_em' da última versão que este aparelho conhece
+let pendingLocal=false;  // há edição local ainda não gravada na nuvem
+let applyingRemote=false;// evita regravar enquanto adota dados vindos da nuvem
 
 function cloudHeaders(){
   return {'apikey':CLOUD.key,'Authorization':'Bearer '+CLOUD.key,'Content-Type':'application/json'};
@@ -611,21 +614,61 @@ async function cloudFetchByToken(token){
   const j=await r.json();
   return j&&j.length?j[0]:null;
 }
-async function cloudSave(){
+async function cloudSave(opts){
   if(!CLOUD_ON||!cloudRow) return;
   if(syncing) return;
   syncing=true;
+  clearTimeout(syncTimer); syncTimer=null;
   try{
-    const u=`${CLOUD.url}/rest/v1/${CLOUD.table}?token=eq.${encodeURIComponent(cloudRow.token)}`;
+    const u=`${CLOUD.url}/rest/v1/${CLOUD.table}?token=eq.${encodeURIComponent(cloudRow.token)}&select=atualizado_em`;
     const body=JSON.stringify({dados:S, nome:S.athlete||'', treinador:S.coach||''});
-    const r=await fetch(u,{method:'PATCH',headers:{...cloudHeaders(),'Prefer':'return=minimal'},body});
+    const req={method:'PATCH',headers:{...cloudHeaders(),'Prefer':'return=representation'},body};
+    if(opts&&opts.keepalive) req.keepalive=true;   // permite concluir mesmo saindo da página
+    const r=await fetch(u,req);
+    if(r.ok){
+      pendingLocal=false;
+      try{ const j=await r.json(); if(j&&j[0]&&j[0].atualizado_em) lastSyncAt=j[0].atualizado_em; }catch(_){}
+    }
     setCloudStatus(r.ok?'ok':'erro');
   }catch(e){ setCloudStatus('offline'); }
   finally{ syncing=false; }
 }
+/* Puxa a versão mais recente da nuvem.
+   Sem isto, um aparelho com a página aberta ficava com a cópia velha —
+   e ao mexer em algo gravava por cima do que o outro aparelho tinha salvo. */
+async function cloudRefresh(){
+  if(!CLOUD_ON||!cloudRow||syncing) return;
+  if(pendingLocal){ await cloudSave(); return; }   // edição local ainda não gravada: grava antes
+  try{
+    const row=await cloudFetchByToken(cloudRow.token);
+    if(!row) return;
+    if(row.atualizado_em && lastSyncAt && row.atualizado_em===lastSyncAt) return;  // nada novo
+    cloudRow=row; lastSyncAt=row.atualizado_em||lastSyncAt;
+    if(row.dados && row.dados.gain){
+      applyingRemote=true;
+      S=row.dados;
+      if(!S.view)S.view='nutri';
+      if(!S.train)S.train={session:1,day:0,plan:defaultPlan(),entries:{},wkMode:'log'};
+      if(!S.train.plan)S.train.plan=defaultPlan();
+      if(!S.train.wkMode)S.train.wkMode='log';
+      S.athlete=row.nome||''; S.coach=row.treinador||'';
+      normalizeSessions();
+      renderIdentity(); setMode(S.mode); setView(S.view||'nutri');
+      applyingRemote=false;
+      setCloudStatus('ok');
+      toast('Atualizado com a versão mais recente');
+    }
+  }catch(e){ setCloudStatus('offline'); }
+}
+// grava imediatamente o que estiver pendente (ao trocar de aba / fechar)
+function cloudFlush(){
+  if(!CLOUD_ON) return;
+  if(pendingLocal || syncTimer){ cloudSave({keepalive:true}); }
+}
 // agenda gravação (evita gravar a cada tecla)
 function cloudSaveDebounced(){
-  if(!CLOUD_ON) return;
+  if(!CLOUD_ON || applyingRemote) return;
+  pendingLocal=true;
   setCloudStatus('salvando');
   clearTimeout(syncTimer);
   syncTimer=setTimeout(cloudSave,1200);
@@ -788,7 +831,7 @@ async function cloudInit(){
   try{
     const row=await cloudFetchByToken(token);
     if(!row){ setCloudStatus('erro'); toast('Link não encontrado'); return false; }
-    cloudRow=row; CLOUD_ON=true;
+    cloudRow=row; CLOUD_ON=true; lastSyncAt=row.atualizado_em||null;
     // no modo nuvem, a chave local é isolada por TOKEN (único por aluno),
     // evitando que abrir a ficha de um aluno sobrescreva a de outro no navegador
     KEY=KEY_BASE+'::cloud::'+token;
@@ -1276,7 +1319,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v14 · 11/08/2026 · desvio semanal corrigido';
+const APP_VERSION='v15 · 11/08/2026 · sincronia entre aparelhos';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -2178,13 +2221,29 @@ document.querySelectorAll('.modal-bg').forEach(bg=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
 
+// Sincroniza ao voltar para o app e grava o pendente ao sair.
+function initSyncEvents(){
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible') cloudRefresh();
+    else cloudFlush();
+  });
+  window.addEventListener('focus',()=>cloudRefresh());
+  window.addEventListener('pagehide',()=>cloudFlush());
+  const st=document.getElementById('cloud-status');
+  if(st){ st.style.cursor='pointer'; st.title='Tocar para buscar a versão mais recente';
+          st.addEventListener('click',()=>cloudRefresh()); }
+}
+
 (async function boot(){
   await cloudInit();           // se o link tiver token, carrega da nuvem
   normalizeSessions();         // migra contador global → por dia, se necessário
+  initSyncEvents();
+  applyingRemote=true;         // a montagem da tela não é edição do usuário
   applyCoachUI();              // esconde edição de ficha se for aluno
   renderIdentity();
   setMode(S.mode);
   setView(S.view||'nutri');
+  applyingRemote=false;        // a partir daqui, alterações são do usuário
   // sem nome e sem nuvem → convida a preencher
   if(!S.athlete && !CLOUD_ON){ setTimeout(openId,400); }
 })();
