@@ -1187,7 +1187,7 @@ function renderLog(c){
   const proj=projectedWeekWeights(c);
   const perStep=c.perSemKg;
   const dirGain=c.m==='gain';
-  const TOL = dirGain?0.12:0.40;
+  // tolerância calculada por linha (depende do peso da semana) — ver tolFor()
   const t=document.getElementById('logtable');
   let html=`<thead><tr>
     <th>Sem</th><th>Peso real</th><th>Projetado</th><th>Δ real</th><th>Desvio</th><th>Ação sugerida</th>
@@ -1208,7 +1208,9 @@ function renderLog(c){
         dev = dr - expSigned;
         desvio=(dev>=0?'+':'')+fmt(dev,2);
         adv = dirGain ? dev : -dev;      // normaliza pela direção do objetivo
-        [flag,flagClass]=decide(i,dirGain,adv,TOL,prevAdv);
+        const TOL = tolFor(prevW, perStep);
+        const acimaTeto = acimaDoTeto(dirGain, dr, prevW);
+        [flag,flagClass]=decide(i,dirGain,adv,TOL,prevAdv,{acimaTeto});
       }
     }
     if(i===0 && !has){ flag='▶ Ponto de partida'; flagClass='start'; }
@@ -1228,13 +1230,38 @@ function renderLog(c){
   t.innerHTML=html;
 }
 
-function decide(i,dirGain,adv,TOL,prevAdv){
+/* TOLERÂNCIA DO ACOMPANHAMENTO
+   Uma faixa de tolerância é necessária: o peso semanal carrega ruído real (água,
+   glicogênio, sódio, conteúdo intestinal), e Helms ajusta a nutrição ~2×/mês
+   justamente para não reagir a flutuação. Mas ela não pode ser um valor fixo:
+   400 g é ruído para quem pesa 120 kg e é maior que o alvo inteiro de quem pesa 55 kg.
+   Aqui a tolerância é o maior entre:
+     (a) 0,15% do peso corporal — piso de ruído biológico da medição semanal;
+     (b) 40% da variação prevista para a semana — proporcional ao ritmo planejado.  */
+function tolFor(pesoAtual, variacaoPrevistaKg){
+  const ruido = 0.0015*(+pesoAtual||0);
+  const rel   = 0.40*Math.abs(+variacaoPrevistaKg||0);
+  return Math.max(ruido, rel, 0.05);     // nunca menor que 50 g
+}
+/* Teto de segurança de Helms: perder mais de 1% do peso/semana ameaça a massa magra,
+   independentemente da intensidade escolhida. Sinaliza já na primeira ocorrência. */
+function acimaDoTeto(dirGain, deltaKg, pesoAtual){
+  if(dirGain || !(pesoAtual>0)) return false;
+  return (-deltaKg)/pesoAtual > 0.01;
+}
+function decide(i,dirGain,adv,TOL,prevAdv,ctx){
   /* adv = avanço em relação ao previsto, JÁ NORMALIZADO pela direção do objetivo:
      adv > 0  → andou MAIS rápido que o previsto rumo à meta
      adv < 0  → andou MAIS devagar (ou foi na direção contrária)
      Normalizar é essencial: no cutting o peso cai, então um desvio negativo em kg
      significa perder MAIS que o previsto — o oposto do que vale no ganho. */
   const twoBad = (prevAdv!=null && Math.sign(prevAdv)===Math.sign(adv) && Math.abs(prevAdv)>TOL);
+  // teto de segurança tem precedência: perder >1%/semana arrisca massa magra
+  if(ctx && ctx.acimaTeto){
+    return twoBad
+      ? ['⛔ 2ª sem. acima de 1%/sem — subir ~200 kcal (risco à massa magra)','alert']
+      : ['⛔ Perda acima de 1%/sem (teto de Helms) — subir ~150 kcal','alert'];
+  }
   if(adv>TOL){ // mais rápido que o previsto
     if(dirGain){
       return twoBad?['⛔ 2ª sem. rápida — reduzir ~100-150 kcal','alert']:['⚠ Ganho acima do previsto — aguardar (pode ser água)','warn'];
@@ -1268,7 +1295,7 @@ function updateProgress(){
 // Recalcula Δ/desvio/ação sem recriar os <input> (preserva foco)
 function updateFlags(){
   const c=calc(), log=S[S.mode].log, proj=projectedWeekWeights(c);
-  const dirGain=c.m==='gain', perStep=c.perSemKg, TOL=dirGain?0.12:0.40;
+  const dirGain=c.m==='gain', perStep=c.perSemKg;
   // primeiro recomputa devs
   let prev=null;
   const rows=document.querySelectorAll('#logtable tbody tr');
@@ -1282,7 +1309,9 @@ function updateFlags(){
         const dr=cur-prevW; deltaReal=(dr>=0?'+':'')+fmt(dr,2);
         const expSigned=dirGain?perStep:-perStep; dev=dr-expSigned; desvio=(dev>=0?'+':'')+fmt(dev,2);
         adv = dirGain ? dev : -dev;      // normaliza pela direção do objetivo
-        [flag,flagClass]=decide(i,dirGain,adv,TOL,prev);
+        const TOL = tolFor(prevW, perStep);
+        const acimaTeto = acimaDoTeto(dirGain, dr, prevW);
+        [flag,flagClass]=decide(i,dirGain,adv,TOL,prev,{acimaTeto});
         drClass=dr>=0?'pos':'neg';
       }
     }
@@ -1333,7 +1362,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v16 · 11/08/2026 · observações por exercício';
+const APP_VERSION='v17 · 12/08/2026 · tolerância proporcional + teto Helms';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -2244,6 +2273,7 @@ const METHODOLOGY=[
  ['Número de semanas','É <b>emergente</b>, nunca um alvo. Resulta da taxa aplicada ao peso decrescente, corrigida pela adaptação. Por isso é sempre maior que uma projeção linear ingênua — cada semana remove um pouco menos que a anterior.'],
  ['Proteína','2,0 g/kg de peso corporal. É a alavanca central da retenção de massa magra em déficit, junto com o treino de força mantido.'],
  ['Ritmo de ajuste','Uma semana fora da faixa = aguardar a próxima medição (pode ser água). Duas semanas seguidas = agir. Helms ajusta a nutrição cerca de 2× por mês, não a cada oscilação da balança.'],
+ ['Faixa de tolerância','O peso semanal carrega ruído real (água, glicogênio, sódio, intestino), por isso existe uma faixa antes de sinalizar desvio. Ela é <b>proporcional</b>, não fixa: o maior entre 0,15% do peso corporal e 40% da variação prevista para a semana. Uma tolerância fixa seria ruído para quem pesa 120 kg e maior que o alvo inteiro de quem pesa 55 kg. Além disso, perder mais de <b>1% do peso por semana</b> (teto de Helms) é sinalizado de imediato, qualquer que seja a intensidade escolhida, por ameaçar a massa magra.'],
  ['Diet break','Após duas semanas estagnadas: uma semana em manutenção para ressensibilizar, e depois retomar. Nunca apenas "cortar mais" — crítica central de Wilson ao ciclo de suprimir o metabolismo.'],
  ['Progressão de carga','Dupla progressão (Helms): a carga só sobe quando <b>todas as séries</b> atingem o topo da faixa de reps. O aumento não é fixo — é <b>relativo à carga usada</b> (≈5% em membros inferiores, ≈3% em superiores), arredondado para o menor degrau disponível no equipamento. Se ainda assim o salto ficar grande demais (como numa elevação lateral leve), amplia-se a faixa de reps em vez de forçar o peso.'],
  ['Deload','Falhar (esforço máximo sem atingir o alvo) em duas sessões seguidas dispara redução de ~10% na carga, para ressensibilizar e retomar a progressão.'],
