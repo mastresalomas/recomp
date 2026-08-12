@@ -305,6 +305,10 @@
   /* READOUT CARDS */
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 1px 0 #e4dac3}
+
+  .card.range{grid-column:span 2}
+  .card.range .v{font-size:25px;white-space:nowrap;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .card.range .arrow{color:var(--ink-faint);font-weight:400;padding:0 1px}
   .card .k{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:9px}
   .card .v{font-family:var(--mono);font-size:27px;font-weight:700;letter-spacing:-.02em}
   .card .v .u{font-size:13px;color:var(--ink-faint);margin-left:3px}
@@ -1109,7 +1113,7 @@ function render(rebuildInputs=true){
     <div class="card"><div class="k">Manutenção</div><div class="v">${(+c.d.manut>0)?fmt(c.manut,0):'—'}<span class="u">kcal</span></div></div>
     <div class="card"><div class="k">${adjLabel} · ${R?fmt(c.pctManut,0)+'% da manut.':'—'}</div><div class="v">${R?(dirGain?'+':'−')+fmt(c.adjust,0):'—'}<span class="u">kcal</span></div></div>
     <div class="card"><div class="k">Taxa alvo</div><div class="v">${R?fmt(c.pctPeso,2):'—'}<span class="u">%/sem</span></div></div>
-    <div class="card"><div class="k">Ingestão: início → fim</div><div class="v">${R?fmt(c.intakeStart,0)+'→'+fmt(c.intakeEnd,0):'—'}<span class="u">kcal</span></div></div>`;
+    <div class="card range"><div class="k">Ingestão: início → fim</div><div class="v">${R?fmt(c.intakeStart,0)+' <span class="arrow">→</span> '+fmt(c.intakeEnd,0):'—'}<span class="u">kcal</span></div></div>`;
 
   // macros
   const totKcal=c.kcalP+c.kcalG+c.kcalC || 1;
@@ -1375,7 +1379,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v18 · 12/08/2026 · tema caderno';
+const APP_VERSION='v19 · 12/08/2026 · cartão de ingestão ajustado';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
