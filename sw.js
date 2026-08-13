@@ -7,7 +7,7 @@
  * >>> AO PUBLICAR UMA NOVA VERSÃO, ATUALIZE A LINHA ABAIXO. <<<
  * Sem isso o navegador não descarta o pacote anterior.
  */
-const VERSAO = 'v17';
+const VERSAO = 'v21';
 
 const CACHE = 'recomp-' + VERSAO;
 
