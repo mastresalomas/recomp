@@ -1,5 +1,62 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+  <!-- ═══════════════════════════════════════════════════════════════════
+     PWA — cole este bloco dentro do <head> do index.html.
+     Nada aqui altera a lógica do app: só adiciona instalação e offline.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#050608">
+
+<!-- iOS ignora boa parte do manifest e exige estas quatro linhas -->
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Recomp">
+
+<script>
+/* ── 1. Guarda o token de quem instalou ──────────────────────────────
+ *
+ * O app identifica o aluno pelo hash do link (#t=TOKEN). Ao instalar na
+ * tela de início, o sistema abre a start_url do manifest — que não tem
+ * hash — e o app abriria vazio. Este trecho lembra o último token usado.
+ *
+ * Só age quando o app foi ABERTO PELO ÍCONE INSTALADO. No navegador o
+ * comportamento continua exatamente o mesmo de hoje: link com token
+ * sempre manda, e abrir a página limpa continua abrindo limpa.
+ */
+(function () {
+  var CHAVE = 'recomp::pwa::ultimoHash';
+
+  try {
+    if (/[#&]t=/.test(location.hash)) {
+      /* Link com token: registra (preserva &edit=1 do link de treinador). */
+      localStorage.setItem(CHAVE, location.hash);
+      return;
+    }
+
+    var instalado = (window.matchMedia &&
+                     window.matchMedia('(display-mode: standalone)').matches) ||
+                    window.navigator.standalone === true;
+    if (!instalado) return;
+
+    var hash = localStorage.getItem(CHAVE);
+    if (hash) location.replace(location.pathname + location.search + hash);
+  } catch (e) { /* modo privado sem localStorage: segue sem o atalho */ }
+})();
+</script>
+
+<script>
+/* ── 2. Liga o service worker (instalação + funcionamento offline) ─── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .catch(function () { /* falhou: o app segue funcionando normalmente */ });
+  });
+}
+</script>
+
+<!-- ═════════════════════════ fim do bloco PWA ═════════════════════════ -->
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1379,7 +1436,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v19 · 12/08/2026 · cartão de ingestão ajustado';
+const APP_VERSION='v20 · 12/08/2026 · ícone de tela';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
