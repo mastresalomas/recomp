@@ -1,66 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <!-- ═══════════════════════════════════════════════════════════════════
-     PWA — cole este bloco dentro do <head> do index.html.
-     Nada aqui altera a lógica do app: só adiciona instalação e offline.
-     ═══════════════════════════════════════════════════════════════════ -->
-
-<link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#050608">
-
-<!-- iOS ignora boa parte do manifest e exige estas quatro linhas -->
-<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SHF">
-
-<script>
-/* ── 1. Guarda o token de quem instalou ──────────────────────────────
- *
- * O app identifica o aluno pelo hash do link (#t=TOKEN). Ao instalar na
- * tela de início, o sistema abre a start_url do manifest — que não tem
- * hash — e o app abriria vazio. Este trecho lembra o último token usado.
- *
- * Só age quando o app foi ABERTO PELO ÍCONE INSTALADO. No navegador o
- * comportamento continua exatamente o mesmo de hoje: link com token
- * sempre manda, e abrir a página limpa continua abrindo limpa.
- */
-(function () {
-  var CHAVE = 'recomp::pwa::ultimoHash';
-
-  try {
-    if (/[#&]t=/.test(location.hash)) {
-      /* Link com token: registra (preserva &edit=1 do link de treinador). */
-      localStorage.setItem(CHAVE, location.hash);
-      return;
-    }
-
-    var instalado = (window.matchMedia &&
-                     window.matchMedia('(display-mode: standalone)').matches) ||
-                    window.navigator.standalone === true;
-    if (!instalado) return;
-
-    var hash = localStorage.getItem(CHAVE);
-    if (hash) location.replace(location.pathname + location.search + hash);
-  } catch (e) { /* modo privado sem localStorage: segue sem o atalho */ }
-})();
-</script>
-
-<script>
-/* ── 2. Liga o service worker (instalação + funcionamento offline) ─── */
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js', { scope: './' })
-      .catch(function () { /* falhou: o app segue funcionando normalmente */ });
-  });
-}
-</script>
-
-<!-- ═════════════════════════ fim do bloco PWA ═════════════════════════ -->
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Salomão Health'n'Fitness</title>
+<title>Recomp · Painel de Composição Corporal</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap');
 
@@ -364,6 +307,37 @@ if ('serviceWorker' in navigator) {
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 1px 0 #e4dac3}
 
   .card.range{grid-column:span 2}
+  /* adaptação observada */
+  .card.recalc{grid-column:span 2;border-color:var(--accent);
+    background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 8%,var(--panel)),var(--panel))}
+  .card.recalc .v{color:var(--accent)}
+  .card.recalc .delta{font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-top:6px}
+  .adapt-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:15px 17px;margin-top:12px}
+  .adapt-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+  .adapt-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    padding:3px 8px;border-radius:5px;font-weight:700}
+  .adapt-tag.confirmada{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+  .adapt-tag.provisoria{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+  .adapt-tag.instavel,.adapt-tag.indetectavel,.adapt-tag.insuficiente{background:var(--panel-2);color:var(--ink-faint)}
+  .adapt-tag.implausivel{background:color-mix(in srgb,var(--alert) 18%,transparent);color:var(--alert)}
+  .adapt-title{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:15px;letter-spacing:.02em}
+  .adapt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin:11px 0}
+  .adapt-cell{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .adapt-cell .ak{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-faint);margin-bottom:4px}
+  .adapt-cell .av{font-family:var(--mono);font-size:15px;font-weight:600}
+  .adapt-msg{font-size:12.5px;color:var(--ink-dim);line-height:1.55}
+  .adapt-alert{margin-top:9px;background:color-mix(in srgb,var(--warn) 10%,transparent);
+    border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:9px;
+    padding:10px 12px;font-size:12px;color:var(--ink);line-height:1.5}
+  .adapt-conduta{margin-top:9px;background:color-mix(in srgb,var(--accent) 8%,transparent);
+    border-left:3px solid var(--accent);border-radius:0 9px 9px 0;padding:10px 12px;
+    font-size:12.5px;color:var(--ink);line-height:1.55}
+  .adapt-conduta .ck{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:4px}
+  .adapt-foot{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line);
+    font-size:11.5px;color:var(--ink-faint);line-height:1.5}
   .card.range .v{font-size:25px;white-space:nowrap;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
   .card.range .arrow{color:var(--ink-faint);font-weight:400;padding:0 1px}
   .card .k{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:9px}
@@ -496,6 +470,7 @@ if ('serviceWorker' in navigator) {
   <section>
     <div class="sec-head"><span class="sec-num">03</span><span class="sec-title">Alvo diário</span></div>
     <div class="cards" id="cards"></div>
+    <div id="adapt-box"></div>
     <div class="macros" id="macros" style="margin-top:12px"></div>
   </section>
 
@@ -1194,6 +1169,7 @@ function render(rebuildInputs=true){
       <div class="card"><div class="k">Meta</div><div class="v">reter<span class="u"> músculo</span></div></div>`;
   }
 
+  renderAdaptation(c);
   renderProjection(c);
   renderLog(c);
   renderMethod();
@@ -1218,6 +1194,196 @@ const KCAL_PER_KG_FAT=7700;      // equivalente calórico do tecido adiposo (Wis
 const MAINT_PER_KG=22;           // kcal/dia por kg de peso corporal (gasto de manutenção)
 const ADAPT_MAX=0.15;            // supressão adaptativa máxima (~15%)
 const ADAPT_TAU=8;               // semanas p/ a adaptação se aproximar do máximo
+
+/* ============================================================
+   ADAPTAÇÃO METABÓLICA OBSERVADA (a partir das pesagens reais)
+   ============================================================
+   Princípio: balanço energético invertido. Se sabemos o que foi prescrito
+   e observamos a variação real de peso, dá para estimar o gasto real:
+
+       ΔE_armazenada = Ingestão − Gasto
+       Gasto_observado = Ingestão − (Δpeso × densidade energética)/dias
+
+   Comparando com o gasto previsto só pela mecânica (menos massa = menos gasto),
+   a diferença é a adaptação aparente:
+
+       adaptação = 1 − Gasto_observado / Gasto_mecânico
+
+   TRÊS CUIDADOS QUE DEFINEM O DESENHO:
+
+   1. ADERÊNCIA é o confundidor dominante. Se o aluno come acima do prescrito,
+      o gasto observado sai baixo e parece adaptação. Não há como separar as
+      duas coisas só com peso. Por isso tudo aqui é "adaptação APARENTE".
+   2. GLICOGÊNIO E ÁGUA distorcem as primeiras semanas: a queda inicial não é
+      tecido adiposo e tem densidade energética muito menor que 7700 kcal/kg.
+      Por isso as 2 primeiras semanas são descartadas.
+   3. RUÍDO. Uma semana isolada não permite conclusão. Usa-se regressão linear
+      sobre a janela e o resultado só é reportado se superar o próprio erro-padrão.
+   ============================================================ */
+const ADAPT_SKIP_FIRST = 2;     // semanas iniciais descartadas (glicogênio/água)
+const ADAPT_MIN_PTS    = 4;     // mínimo para qualquer estimativa
+const ADAPT_CONF_PTS   = 6;     // mínimo para considerar a estimativa firme
+const ADAPT_LO = -0.10, ADAPT_HI = 0.30;   // limites fisiologicamente plausíveis
+const NOISE_BW = 0.0015;        // ruído de medição ≈ 0,15% do peso corporal
+const ADAPT_ESTAVEL = 0.06;     // divergência máxima entre metades da janela
+/* JANELA MÓVEL — usa apenas as pesagens mais recentes. Duas razões:
+   a adaptação real CRESCE ao longo da fase (é fisiológico), então uma média de
+   todo o histórico subestima o estado atual; e comparar o início com o fim do
+   período acusaria "instabilidade" onde há apenas tendência esperada.
+   A janela responde ao metabolismo de agora, que é o que define a ingestão de agora. */
+const ADAPT_JANELA = 6;
+/* AMORTECIMENTO DO AJUSTE
+   Nenhuma mudança calórica é aplicada de uma medição para outra. Helms ajusta a
+   nutrição ~2×/mês, com mudanças modestas. O passo é limitado ao maior entre
+   100 kcal e 5% da ingestão atual, e a diferença restante é absorvida nas
+   reavaliações seguintes — o alvo é convergir, não saltar. */
+const PASSO_MIN_KCAL = 100, PASSO_PCT = 0.05;
+
+function analyzeAdaptation(c){
+  const vazio={status:'insuficiente', pts:0, msg:''};
+  if(!c || !c.ready || c.m!=='cut') return {...vazio, msg:'Disponível no modo de perda de gordura.'};
+  const log=(S[c.m].log)||[];
+  // pontos utilizáveis: (semana, peso), descartando as iniciais
+  const pts=[];
+  log.forEach((r,i)=>{
+    if(i < ADAPT_SKIP_FIRST) return;
+    if(r && r.peso!=='' && r.peso!=null && isFinite(+r.peso)) pts.push({x:i+1, y:+r.peso});
+  });
+  const total=pts.length;
+  if(total > ADAPT_JANELA) pts.splice(0, total-ADAPT_JANELA);   // mantém as mais recentes
+  if(pts.length < ADAPT_MIN_PTS){
+    const faltam=ADAPT_MIN_PTS-pts.length;
+    return {...vazio, pts:pts.length,
+      msg:`Faltam ${faltam} pesagem(ns) para estimar a adaptação real. As ${ADAPT_SKIP_FIRST} primeiras semanas são descartadas (queda inicial é água e glicogênio, não gordura).`};
+  }
+  // --- regressão linear: peso ~ semana ---
+  const n=pts.length;
+  const mx=pts.reduce((s,p)=>s+p.x,0)/n, my=pts.reduce((s,p)=>s+p.y,0)/n;
+  let Sxy=0, Sxx=0;
+  pts.forEach(p=>{ Sxy+=(p.x-mx)*(p.y-my); Sxx+=(p.x-mx)*(p.x-mx); });
+  if(Sxx<=0) return {...vazio, pts:n, msg:'Pesagens em uma única semana — não dá para estimar tendência.'};
+  const slope=Sxy/Sxx;                       // kg por semana (negativo no cutting)
+  // resíduos → ruído real das medições deste aluno
+  let ss=0; pts.forEach(p=>{ const yh=my+slope*(p.x-mx); ss+=(p.y-yh)*(p.y-yh); });
+  const sigma = n>2 ? Math.sqrt(ss/(n-2)) : NOISE_BW*my;
+  const sigmaUse = Math.max(sigma, NOISE_BW*my);   // piso: ruído biológico conhecido
+  const seSlope = sigmaUse/Math.sqrt(Sxx);
+
+  // --- energia ---
+  const rho=KCAL_PER_KG_FAT;                       // 7700 kcal/kg de tecido adiposo
+  const proj=projectedWeekWeights(c);
+  const intakes=(proj&&proj._intakes)||[];
+  // ingestão prescrita em cada semana da janela (fallback: alvo atual)
+  const ing=pts.map(p=> (intakes[p.x-1]!=null? intakes[p.x-1] : c.calAlvo));
+  const meanIntake=ing.reduce((s,v)=>s+v,0)/ing.length;
+
+  const gastoObs = meanIntake - (slope*rho/7);     // slope<0 no cutting → gasto > ingestão
+  const baseFixed = Math.max(c.manut - MAINT_PER_KG*c.peso, 0);
+  const gastoMec  = baseFixed + MAINT_PER_KG*my;   // previsto pela massa média da janela
+  if(!(gastoMec>0)) return {...vazio, pts:n, msg:'Dados insuficientes.'};
+
+  let adapt = 1 - gastoObs/gastoMec;
+  // incerteza propagada da inclinação
+  const seAdapt = (seSlope*rho/7)/gastoMec;
+
+  /* ESTABILIDADE — uma estimativa significativa uma única vez não basta.
+     Divide a janela ao meio e recalcula: se as duas metades divergem muito,
+     a adaptação ainda não se firmou e não deve orientar mudança calórica. */
+  let estavel=null, adaptA=null, adaptB=null;
+  if(n>=ADAPT_CONF_PTS){
+    const meio=Math.floor(n/2);
+    const metade=(sub)=>{
+      if(sub.length<2) return null;
+      const k=sub.length;
+      const mxs=sub.reduce((s,p)=>s+p.x,0)/k, mys=sub.reduce((s,p)=>s+p.y,0)/k;
+      let sxy=0,sxx=0; sub.forEach(p=>{sxy+=(p.x-mxs)*(p.y-mys); sxx+=(p.x-mxs)*(p.x-mxs);});
+      if(sxx<=0) return null;
+      const sl=sxy/sxx;
+      const ingS=sub.map(p=> (intakes[p.x-1]!=null? intakes[p.x-1] : c.calAlvo));
+      const mi=ingS.reduce((s,v)=>s+v,0)/ingS.length;
+      const gObs=mi-(sl*rho/7);
+      const gMec=baseFixed+MAINT_PER_KG*mys;
+      return gMec>0 ? 1-gObs/gMec : null;
+    };
+    adaptA=metade(pts.slice(0,meio));
+    adaptB=metade(pts.slice(meio));
+    if(adaptA!=null && adaptB!=null) estavel = Math.abs(adaptA-adaptB) <= ADAPT_ESTAVEL;
+  }
+
+  // --- classificação ---
+  const implausivel = adapt < ADAPT_LO || adapt > ADAPT_HI;
+  const adaptClamp = Math.max(ADAPT_LO, Math.min(ADAPT_HI, adapt));
+  let status, msg;
+  if(implausivel){
+    status='implausivel';
+    msg = adapt>ADAPT_HI
+      ? 'O gasto observado está muito abaixo do previsto. Adaptação dessa magnitude é rara — o mais provável é ingestão acima da prescrita ou erro de pesagem.'
+      : 'O gasto observado está acima do previsto. Costuma indicar ingestão abaixo da prescrita, atividade extra ou erro de pesagem.';
+  } else if(Math.abs(adapt) <= seAdapt){
+    status='indetectavel';
+    msg='A variação observada está dentro do ruído das medições. Sem evidência de adaptação além da queda mecânica esperada.';
+  } else if(Math.abs(adapt) <= 2*seAdapt || n < ADAPT_CONF_PTS){
+    status='provisoria';
+    msg=`Sinal de adaptação, mas ainda sem base para mudar calorias (${n} ${n>1?'pesagens':'pesagem'}). São necessárias ao menos ${ADAPT_CONF_PTS} medições consistentes.`;
+  } else if(estavel===false){
+    status='instavel';
+    msg=`A estimativa oscila entre as metades do período (${fmt(adaptA*100,1)}% e ${fmt(adaptB*100,1)}%). Ainda não é uma tendência firme — mantenha o plano e reavalie nas próximas semanas.`;
+  } else {
+    status='confirmada';
+    msg=`Adaptação consistente e estável ao longo de ${n} pesagens, acima do ruído das medições.`;
+  }
+
+  // Adaptação acima de ~15% é incomum na literatura fora de casos extremos.
+  // Nessa faixa, ingestão acima da prescrita costuma ser explicação mais provável.
+  const alerta = (!implausivel && adaptClamp > 0.15)
+    ? 'Magnitude alta. Antes de reduzir calorias, confirme a aderência e a precisão da pesagem — subnotificação de ingestão é mais comum que adaptação desse tamanho.'
+    : '';
+
+  // --- ingestão recalculada com a adaptação observada ---
+  const pesoAtual = pts[pts.length-1].y;
+  const gastoAgora = (baseFixed + MAINT_PER_KG*pesoAtual) * (1 - adaptClamp);
+  const deficitDia = pesoAtual*c.rate*rho/7;       // déficit p/ manter a taxa alvo no peso de hoje
+  const intakeNovo = gastoAgora - deficitDia;
+
+  /* CONDUTA — ponto metodológico central.
+     Adaptação confirmada NÃO significa "cortar mais". Helms, ao primeiro sinal de
+     estagnação, insere diet break e mira taxa menor; Wilson critica explicitamente o
+     ciclo "comer menos + mais cardio", que produz metabolismo suprimido. O valor
+     recalculado serve para dimensionar a realidade, não para autorizar corte agressivo. */
+  /* AJUSTE AMORTECIDO — o valor recalculado é o destino, não o próximo passo.
+     Só se aplica quando a adaptação está confirmada E estável, e ainda assim
+     limitado a um passo modesto por reavaliação. */
+  const passoMax = Math.max(PASSO_MIN_KCAL, PASSO_PCT*Math.abs(c.calAlvo));
+  const gap = intakeNovo - c.calAlvo;
+  const passo = Math.max(-passoMax, Math.min(passoMax, gap));
+  const intakeSugerido = c.calAlvo + passo;
+  const reavaliacoes = passoMax>0 ? Math.ceil(Math.abs(gap)/passoMax) : 0;
+
+  const deficitPct = gastoAgora>0 ? deficitDia/gastoAgora : 0;
+  let conduta='', aplicar=false;
+  if(status!=='confirmada'){
+    conduta='Nenhuma mudança calórica indicada ainda. Continue registrando o peso semanalmente — o ajuste só se justifica com uma tendência firme.';
+  } else if(adaptClamp >= 0.15){
+    conduta='Adaptação nesta faixa pede <b>alívio, não aperto</b>: uma semana em manutenção (diet break) e retomada com taxa menor tende a render mais que cortar calorias. Corte adicional aqui é o caminho que suprime o metabolismo.';
+  } else if(deficitPct > 0.30){
+    conduta='O déficit implícito passa de 30% do gasto observado — território agressivo. Reduza a taxa alvo em vez de aplicar o corte.';
+  } else if(adaptClamp >= 0.05){
+    aplicar=true;
+    conduta=`Adaptação dentro do esperado para a fase. Ajuste sugerido: <b>${passo>=0?'+':'−'}${fmt(Math.abs(passo),0)} kcal</b> agora, não o valor cheio. ${reavaliacoes>1?`Faltariam ~${reavaliacoes} reavaliações para convergir.`:''} Helms ajusta a nutrição cerca de 2×/mês — reavalie em 2 semanas.`;
+  } else {
+    aplicar=true;
+    conduta=`Diferença pequena frente ao previsto. Ajuste sugerido: <b>${passo>=0?'+':'−'}${fmt(Math.abs(passo),0)} kcal</b>, ou simplesmente manter e observar.`;
+  }
+
+  return {
+    status, pts:n, msg, alerta, conduta, deficitPct, aplicar,
+    passo, intakeSugerido, reavaliacoes, estavel, adaptA, adaptB,
+    slope, adapt:adaptClamp, adaptBruto:adapt, seAdapt,
+    gastoObs, gastoMec, meanIntake, pesoAtual,
+    gastoAgora, intakeNovo, deficitDia,
+    teorica: ADAPT_MAX*(1-Math.exp(-(pts[pts.length-1].x)/ADAPT_TAU))
+  };
+}
 
 function projectedWeekWeights(c){
   const arr=[];
@@ -1436,7 +1602,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v22 · 12/08/2026 · ícone de tela NOVO';
+const APP_VERSION='v21 · 12/08/2026 · ajuste amortecido e estável';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
@@ -2289,6 +2455,52 @@ function edResetPlan(){
 }
 
 /* ---------- projeção detalhada (tabela semana a semana) ---------- */
+function renderAdaptation(c){
+  const box=document.getElementById('adapt-box');
+  const cards=document.getElementById('cards');
+  if(!box) return;
+  const a=analyzeAdaptation(c);
+  // cartão só aparece quando há base para agir — e mostra o PASSO, não o destino
+  if(a.aplicar && cards){
+    const sinal=a.passo>=0?'+':'−';
+    const cheio=Math.round(a.intakeNovo-c.calAlvo);
+    cards.insertAdjacentHTML('beforeend',
+      `<div class="card recalc"><div class="k">Ajuste sugerido agora</div>
+        <div class="v">${fmt(a.intakeSugerido,0)}<span class="u">kcal</span></div>
+        <div class="delta">${sinal}${fmt(Math.abs(a.passo),0)} kcal · passo amortecido${Math.abs(cheio)>Math.abs(a.passo)?` (destino ${fmt(a.intakeNovo,0)})`:''}</div></div>`);
+  }
+
+  const rot={confirmada:'confirmada',provisoria:'provisória',instavel:'instável',indetectavel:'não detectada',
+             insuficiente:'dados insuficientes',implausivel:'valor implausível'};
+  let grade='';
+  if(a.pts>=ADAPT_MIN_PTS && a.adapt!=null){
+    grade=`<div class="adapt-grid">
+      <div class="adapt-cell"><div class="ak">Gasto previsto</div><div class="av">${fmt(a.gastoMec,0)}</div></div>
+      <div class="adapt-cell"><div class="ak">Gasto observado</div><div class="av">${fmt(a.gastoObs,0)}</div></div>
+      <div class="adapt-cell"><div class="ak">Adaptação aparente</div><div class="av">${fmt(a.adaptBruto*100,1)}% <span style="font-size:11px;opacity:.6">± ${fmt(a.seAdapt*100,1)}</span></div></div>
+      <div class="adapt-cell"><div class="ak">Modelo teórico</div><div class="av">${fmt(a.teorica*100,1)}%</div></div>
+      <div class="adapt-cell"><div class="ak">Perda observada</div><div class="av">${fmt(Math.abs(a.slope)*1000,0)} g/sem</div></div>
+      <div class="adapt-cell"><div class="ak">Pesagens usadas</div><div class="av">${a.pts}</div></div>
+    </div>`;
+  }
+  box.innerHTML=`<div class="adapt-box">
+    <div class="adapt-head">
+      <span class="adapt-title">Adaptação metabólica observada</span>
+      <span class="adapt-tag ${a.status}">${rot[a.status]||a.status}</span>
+    </div>
+    ${grade}
+    <div class="adapt-msg">${a.msg}</div>
+    ${a.alerta?`<div class="adapt-alert">${a.alerta}</div>`:''}
+    ${a.conduta?`<div class="adapt-conduta"><span class="ck">Conduta sugerida</span>${a.conduta}</div>`:''}
+    <div class="adapt-foot">
+      Estimativa por balanço energético invertido: compara o gasto que a variação real de peso
+      implica com o gasto previsto apenas pela perda de massa. <b>Assume que a ingestão prescrita
+      foi seguida</b> — desvios de aderência aparecem aqui como se fossem adaptação. As
+      ${ADAPT_SKIP_FIRST} primeiras semanas são descartadas (água e glicogênio).
+    </div>
+  </div>`;
+}
+
 function renderProjection(c){
   const t=document.getElementById('proj-table');
   const foot=document.getElementById('proj-foot');
@@ -2346,6 +2558,8 @@ const METHODOLOGY=[
  ['Adaptação metabólica','Modelo inspirado em Kevin Hall. Dois efeitos somados: <b>queda mecânica</b> (a manutenção cai porque há menos massa corporal, ~22 kcal/kg) e <b>termogênese adaptativa</b> (supressão adicional do gasto sob restrição prolongada, que cresce e satura em ~15%).'],
  ['Número de semanas','É <b>emergente</b>, nunca um alvo. Resulta da taxa aplicada ao peso decrescente, corrigida pela adaptação. Por isso é sempre maior que uma projeção linear ingênua — cada semana remove um pouco menos que a anterior.'],
  ['Proteína','2,0 g/kg de peso corporal. É a alavanca central da retenção de massa magra em déficit, junto com o treino de força mantido.'],
+ ['Adaptação observada vs. teórica','O modelo teórico projeta a adaptação por uma curva que satura em ~15%. Mas o app também <b>estima a adaptação real</b> a partir das pesagens, invertendo o balanço energético: se sabemos o que foi prescrito e observamos a variação de peso, o gasto real é <b>Ingestão − (Δpeso × 7700)/dias</b>. Comparando com o gasto previsto apenas pela perda de massa, a diferença é a adaptação aparente. Três cuidados definem o método: as 2 primeiras semanas são descartadas (a queda inicial é água e glicogênio, de densidade energética muito menor); usa-se regressão sobre várias pesagens, não duas medidas isoladas; e o resultado só é reportado quando supera o próprio erro-padrão. <b>Limite honesto:</b> aderência é indistinguível de adaptação por este método — comer acima do prescrito aparece como se fosse metabolismo lento. Por isso o valor é chamado de <i>aparente</i>, e magnitudes acima de 15% disparam alerta de verificação.'],
+ ['Conduta diante da adaptação','Adaptação confirmada <b>não autoriza cortar mais</b>. Helms, ao primeiro sinal de estagnação, insere diet break e retoma com taxa menor; Wilson critica explicitamente o ciclo "comer menos e fazer mais cardio", que produz metabolismo suprimido e exige recuperação metabólica antes de nova fase. O valor recalculado serve para dimensionar a realidade do gasto, não para justificar déficit agressivo.'],
  ['Ritmo de ajuste','Uma semana fora da faixa = aguardar a próxima medição (pode ser água). Duas semanas seguidas = agir. Helms ajusta a nutrição cerca de 2× por mês, não a cada oscilação da balança.'],
  ['Faixa de tolerância','O peso semanal carrega ruído real (água, glicogênio, sódio, intestino), por isso existe uma faixa antes de sinalizar desvio. Ela é <b>proporcional</b>, não fixa: o maior entre 0,15% do peso corporal e 40% da variação prevista para a semana. Uma tolerância fixa seria ruído para quem pesa 120 kg e maior que o alvo inteiro de quem pesa 55 kg. Além disso, perder mais de <b>1% do peso por semana</b> (teto de Helms) é sinalizado de imediato, qualquer que seja a intensidade escolhida, por ameaçar a massa magra.'],
  ['Diet break','Após duas semanas estagnadas: uma semana em manutenção para ressensibilizar, e depois retomar. Nunca apenas "cortar mais" — crítica central de Wilson ao ciclo de suprimir o metabolismo.'],
