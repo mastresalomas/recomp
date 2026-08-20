@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Recomp · Painel de Composição Corporal</title>
-<link rel="manifest" href="manifest.json">
+<title>Salomão Health'n'Fitness</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap');
 
@@ -404,6 +403,138 @@
   }
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     BLOCO PWA — colar dentro do <head>, logo antes de </head>.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#050608">
+
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SHF">
+
+<script>
+/* ── Vínculo do aluno no app instalado ───────────────────────────────
+ *
+ * O app identifica o aluno pelo hash do link (#t=TOKEN). Quando aberto
+ * pelo ícone, o sistema usa a start_url do manifest, que não tem hash.
+ *
+ * 1. Link com token  → guarda o token neste navegador.
+ * 2. Ícone com token guardado → restaura e segue.
+ * 3. Ícone sem token guardado → pede o link uma vez, em vez de abrir
+ *    uma ficha vazia (caso de quem instalou antes de abrir o link, ou
+ *    abriu o link no navegador do WhatsApp e instalou pelo Chrome).
+ *
+ * No navegador comum, nada muda em relação ao comportamento de hoje.
+ */
+(function () {
+  var CHAVE = 'recomp::pwa::ultimoHash';
+
+  function instalado() {
+    return (window.matchMedia &&
+            window.matchMedia('(display-mode: standalone)').matches) ||
+           window.navigator.standalone === true;
+  }
+
+  try {
+    if (/[#&]t=/.test(location.hash)) {
+      localStorage.setItem(CHAVE, location.hash);
+      return;
+    }
+    if (!instalado()) return;
+
+    var guardado = localStorage.getItem(CHAVE);
+    if (guardado) {
+      location.replace(location.pathname + location.search + guardado);
+      return;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', pedirLink);
+    } else {
+      pedirLink();
+    }
+  } catch (e) { /* sem localStorage: segue o fluxo normal do app */ }
+
+  function pedirLink() {
+    var fundo = document.createElement('div');
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#050608;' +
+      'display:flex;align-items:center;justify-content:center;padding:24px;' +
+      'font-family:Georgia,serif;overflow:auto';
+
+    var caixa = document.createElement('div');
+    caixa.style.cssText = 'max-width:420px;width:100%;background:#f7f3ea;color:#20222a;' +
+      'border-radius:14px;padding:28px 24px;box-shadow:0 18px 50px rgba(0,0,0,.5)';
+
+    var titulo = document.createElement('h2');
+    titulo.textContent = 'Vincular este aparelho';
+    titulo.style.cssText = 'margin:0 0 10px;font-size:22px';
+
+    var texto = document.createElement('p');
+    texto.textContent = 'Cole aqui o link pessoal que seu treinador enviou. ' +
+      'É uma vez só — depois disso o ícone abre direto na sua ficha.';
+    texto.style.cssText = 'margin:0 0 18px;font-size:15px;line-height:1.5;color:#4a4a55';
+
+    var campo = document.createElement('input');
+    campo.type = 'url';
+    campo.placeholder = 'https://…/recomp/index.html#t=…';
+    campo.setAttribute('autocapitalize', 'off');
+    campo.setAttribute('autocorrect', 'off');
+    campo.style.cssText = 'width:100%;box-sizing:border-box;padding:13px 12px;font-size:16px;' +
+      'border:1px solid #c9c3b4;border-radius:9px;background:#fff;font-family:inherit';
+
+    var aviso = document.createElement('p');
+    aviso.style.cssText = 'margin:10px 0 0;font-size:14px;color:#b3261e;min-height:19px';
+
+    var botao = document.createElement('button');
+    botao.type = 'button';
+    botao.textContent = 'Abrir minha ficha';
+    botao.style.cssText = 'margin-top:16px;width:100%;padding:14px;font-size:16px;' +
+      'border:0;border-radius:9px;background:#2b3a7a;color:#fff;font-family:inherit;cursor:pointer';
+
+    function confirmar() {
+      var achado = String(campo.value || '').match(/[#&]t=([A-Za-z0-9_-]+)/);
+      if (!achado) {
+        aviso.textContent = 'Não encontrei o código nesse link. Cole o endereço completo.';
+        return;
+      }
+      var hash = '#t=' + achado[1];
+      try { localStorage.setItem(CHAVE, hash); } catch (e) {}
+      location.replace(location.pathname + location.search + hash);
+    }
+
+    botao.addEventListener('click', confirmar);
+    campo.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') confirmar();
+    });
+
+    caixa.appendChild(titulo);
+    caixa.appendChild(texto);
+    caixa.appendChild(campo);
+    caixa.appendChild(aviso);
+    caixa.appendChild(botao);
+    fundo.appendChild(caixa);
+    document.body.appendChild(fundo);
+    campo.focus();
+  }
+})();
+</script>
+
+<script>
+/* ── Liga o service worker (instalação + funcionamento offline) ────── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .catch(function () { /* falhou: o app segue funcionando normalmente */ });
+  });
+}
+</script>
+
+<!-- ═════════════════════════ fim do bloco PWA ═════════════════════════ -->
 </head>
 <body>
 <div class="wrap">
@@ -1603,7 +1734,7 @@ function renderMethod(){
       <p><b>Projeção dinâmica (modelo de Kevin Hall):</b> a taxa percentual do plano (ex.: 0,5%/sem) é mantida fixa, mas aplicada ao <b>peso atual de cada semana</b> — então a perda em kg decresce naturalmente (0,5% de 90 kg > 0,5% de 82 kg). A ingestão é recalculada a cada semana para atingir esse alvo, considerando a queda da manutenção e a termogênese adaptativa. Por isso o número de semanas <b>emerge do modelo</b>, maior que uma estimativa linear: chegar à meta é o objetivo, o tempo é consequência da fisiologia, não um alvo.</p>`;
   }
 }
-const APP_VERSION='v23 · 12/08/2026 · ajuste amortecido e estável';
+const APP_VERSION='v24 · 20/08/2026 · instalável na tela de início';
 function renderFooter(){
   document.getElementById('footer').innerHTML=
     `Compilado de Eric Helms (Muscle & Strength Pyramids), Christopher Barakat (partição/recomposição) e Cliff Wilson (Team Wilson). `+
